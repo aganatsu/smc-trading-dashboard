@@ -6,13 +6,13 @@
  * Colors: Deep charcoal #0A0A0F, electric cyan #00E5FF accent, sharp 0px radius everywhere
  * Mobile: Sidebar collapses, analysis panels stack vertically
  * 
- * TradingView Advanced Chart widget replaces lightweight-charts for full charting experience.
- * SMC analysis engine still runs on Twelve Data API for order blocks, FVGs, liquidity, etc.
+ * TradingView Advanced Chart widget for charting.
+ * SMC analysis engine runs on Yahoo Finance data via backend (no API key needed).
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { INSTRUMENTS, TIMEFRAMES, fetchCandles, fetchQuote, setApiKey, hasCustomApiKey } from '@/lib/marketData';
+import { INSTRUMENTS, TIMEFRAMES, fetchCandles, fetchQuote } from '@/lib/marketData';
 import type { Instrument, Timeframe } from '@/lib/marketData';
 import type { Candle, AnalysisResult } from '@/lib/smcAnalysis';
 import { runFullAnalysis } from '@/lib/smcAnalysis';
@@ -22,8 +22,7 @@ import KeyLevelsPanel from '@/components/KeyLevelsPanel';
 import EntryChecklistPanel from '@/components/EntryChecklistPanel';
 import RiskManagementPanel from '@/components/RiskManagementPanel';
 import AlertGeneratorPanel from '@/components/AlertGeneratorPanel';
-import ApiKeyModal from '@/components/ApiKeyModal';
-import { Settings, RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell, BarChart3 } from 'lucide-react';
+import { RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell } from 'lucide-react';
 
 type BottomTab = 'structure' | 'levels' | 'checklist' | 'risk' | 'alerts';
 
@@ -34,14 +33,12 @@ export default function Dashboard() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [quote, setQuote] = useState<{ price: number; change: number; percentChange: number } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<BottomTab>('checklist');
-  const [showAlertPanel, setShowAlertPanel] = useState(false);
 
   // Multi-timeframe analysis state
   const [weeklyTrend, setWeeklyTrend] = useState<string>('—');
@@ -92,11 +89,7 @@ export default function Dashboard() {
     } catch (err: any) {
       const msg = err.message || 'Failed to load data';
       setError(msg);
-      if (msg.includes('API key') || msg.includes('demo')) {
-        toast.error('API key required for this symbol. Click the settings icon to add your free Twelve Data API key.');
-      } else {
-        toast.error(msg);
-      }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -192,17 +185,6 @@ export default function Dashboard() {
             </div>
           </>
         )}
-
-        {/* Settings button */}
-        <div className="border-t-4 border-border p-3">
-          <button
-            onClick={() => setShowApiKeyModal(true)}
-            className="w-full flex items-center justify-center gap-2 py-2 text-muted-foreground hover:text-cyan transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            {!sidebarCollapsed && <span className="text-xs uppercase tracking-wider">Settings</span>}
-          </button>
-        </div>
       </aside>
 
       {/* MOBILE SIDEBAR OVERLAY */}
@@ -257,15 +239,6 @@ export default function Dashboard() {
                   </div>
                 );
               })}
-            </div>
-            <div className="border-t-4 border-border p-3">
-              <button
-                onClick={() => { setShowApiKeyModal(true); setMobileMenuOpen(false); }}
-                className="w-full flex items-center justify-center gap-2 py-2 text-muted-foreground hover:text-cyan transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-xs uppercase tracking-wider">Settings</span>
-              </button>
             </div>
           </aside>
         </div>
@@ -362,17 +335,9 @@ export default function Dashboard() {
                 </div>
                 <p className="text-bearish font-mono text-sm mb-2">CONNECTION ERROR</p>
                 <p className="text-muted-foreground text-xs font-mono mb-6">{error}</p>
-                {!hasCustomApiKey() && (
-                  <button
-                    onClick={() => setShowApiKeyModal(true)}
-                    className="px-6 py-3 bg-primary text-primary-foreground font-bold text-sm uppercase tracking-wider hover:opacity-90 transition-opacity"
-                  >
-                    Add API Key
-                  </button>
-                )}
                 <button
                   onClick={loadData}
-                  className="ml-3 px-6 py-3 bg-muted text-foreground font-bold text-sm uppercase tracking-wider hover:bg-muted/80 transition-colors"
+                  className="px-6 py-3 bg-muted text-foreground font-bold text-sm uppercase tracking-wider hover:bg-muted/80 transition-colors"
                 >
                   Retry
                 </button>
@@ -461,11 +426,6 @@ export default function Dashboard() {
           )}
         </div>
       </main>
-
-      {/* API Key Modal */}
-      {showApiKeyModal && (
-        <ApiKeyModal onClose={() => setShowApiKeyModal(false)} onSave={(key: string) => { setApiKey(key); setShowApiKeyModal(false); loadData(); }} />
-      )}
     </div>
   );
 }

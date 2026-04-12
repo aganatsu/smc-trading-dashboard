@@ -1,13 +1,11 @@
 /**
- * Market Data Service — Twelve Data API
+ * Market Data Service — Yahoo Finance via Backend tRPC
  * 
  * Design: Obsidian Forge — Dark Brutalist Trading Interface
- * Fetches OHLCV data for Forex, Crypto, and Commodities.
+ * No API key required — data is fetched server-side via Yahoo Finance.
  */
 
 import type { Candle } from './smcAnalysis';
-
-const BASE_URL = 'https://api.twelvedata.com';
 
 export interface Instrument {
   symbol: string;
@@ -42,62 +40,31 @@ export const TIMEFRAMES: { value: Timeframe; label: string; shortLabel: string }
   { value: '5min', label: '5 Minute', shortLabel: '5m' },
 ];
 
-// API key storage
-const API_KEY_STORAGE = 'smc_twelve_data_api_key';
-
-export function getApiKey(): string {
-  return localStorage.getItem(API_KEY_STORAGE) || 'demo';
-}
-
-export function setApiKey(key: string): void {
-  localStorage.setItem(API_KEY_STORAGE, key);
-}
-
-export function hasCustomApiKey(): boolean {
-  const key = localStorage.getItem(API_KEY_STORAGE);
-  return !!key && key !== 'demo';
-}
-
-// Fetch OHLCV candle data
+// Direct fetch functions that call the backend API via tRPC-compatible endpoint
 export async function fetchCandles(
   symbol: string,
   interval: Timeframe,
   outputsize: number = 200,
 ): Promise<Candle[]> {
-  const apiKey = getApiKey();
+  const response = await fetch('/api/trpc/market.candles?input=' + encodeURIComponent(
+    JSON.stringify({ json: { symbol, interval, outputsize } })
+  ));
   
-  const params = new URLSearchParams({
-    symbol,
-    interval,
-    outputsize: String(outputsize),
-    apikey: apiKey,
-  });
-  
-  const response = await fetch(`${BASE_URL}/time_series?${params}`);
   const data = await response.json();
   
-  if (data.status === 'error') {
-    throw new Error(data.message || 'Failed to fetch data');
+  if (data.error) {
+    throw new Error(data.error.message || 'Failed to fetch data');
   }
   
-  if (!data.values || !Array.isArray(data.values)) {
+  const result = data?.result?.data?.json;
+  if (!result || !Array.isArray(result)) {
     throw new Error('No data returned from API');
   }
   
-  // Twelve Data returns newest first, reverse for chronological order
-  return data.values
-    .map((v: any) => ({
-      datetime: v.datetime,
-      open: parseFloat(v.open),
-      high: parseFloat(v.high),
-      low: parseFloat(v.low),
-      close: parseFloat(v.close),
-      volume: v.volume ? parseFloat(v.volume) : undefined,
-    }))
-    .reverse();
+  return result;
 }
 
-// Fetch current quote
+// Fetch current quote via backend
 export async function fetchQuote(symbol: string): Promise<{
   price: number;
   change: number;
@@ -107,27 +74,15 @@ export async function fetchQuote(symbol: string): Promise<{
   low: number;
   previousClose: number;
 }> {
-  const apiKey = getApiKey();
+  const response = await fetch('/api/trpc/market.quote?input=' + encodeURIComponent(
+    JSON.stringify({ json: { symbol } })
+  ));
   
-  const params = new URLSearchParams({
-    symbol,
-    apikey: apiKey,
-  });
-  
-  const response = await fetch(`${BASE_URL}/quote?${params}`);
   const data = await response.json();
   
-  if (data.status === 'error') {
-    throw new Error(data.message || 'Failed to fetch quote');
+  if (data.error) {
+    throw new Error(data.error.message || 'Failed to fetch quote');
   }
   
-  return {
-    price: parseFloat(data.close),
-    change: parseFloat(data.change),
-    percentChange: parseFloat(data.percent_change),
-    open: parseFloat(data.open),
-    high: parseFloat(data.high),
-    low: parseFloat(data.low),
-    previousClose: parseFloat(data.previous_close),
-  };
+  return data?.result?.data?.json;
 }
