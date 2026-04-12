@@ -6,8 +6,7 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+
 import { toast } from "sonner";
 import {
   Zap, ArrowLeft, Plus, X, TrendingUp, TrendingDown, Target,
@@ -88,7 +87,7 @@ const emptyForm: TradeFormData = {
 
 export default function TradeJournal() {
   const [, setLocation] = useLocation();
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<TradeFormData>(emptyForm);
@@ -99,12 +98,8 @@ export default function TradeJournal() {
   // tRPC queries
   const tradesQuery = trpc.trades.list.useQuery(
     { limit: 100, offset: 0 },
-    { enabled: isAuthenticated }
   );
-  const statsQuery = trpc.trades.stats.useQuery(
-    undefined,
-    { enabled: isAuthenticated }
-  );
+  const statsQuery = trpc.trades.stats.useQuery();
 
   const utils = trpc.useUtils();
 
@@ -219,43 +214,7 @@ export default function TradeJournal() {
 
   const stats = statsQuery.data;
 
-  // Auth gate
-  if (authLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Zap className="w-8 h-8 text-cyan animate-pulse mx-auto mb-4" />
-          <p className="text-muted-foreground font-mono text-sm">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md p-8">
-          <BookOpen className="w-12 h-12 text-cyan mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2 font-mono">TRADE JOURNAL</h1>
-          <p className="text-muted-foreground text-sm mb-6">
-            Sign in to log your trades, track performance, and review your strategy adherence.
-          </p>
-          <a
-            href={getLoginUrl()}
-            className="inline-block px-8 py-3 bg-primary text-primary-foreground font-bold text-sm uppercase tracking-wider hover:opacity-90 transition-opacity"
-          >
-            Sign In
-          </a>
-          <button
-            onClick={() => setLocation("/")}
-            className="block mx-auto mt-4 text-xs text-muted-foreground hover:text-cyan transition-colors font-mono"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -330,11 +289,9 @@ export default function TradeJournal() {
         )}
 
         {/* EQUITY CURVE */}
-        {isAuthenticated && (
-          <div className="px-4 lg:px-6 py-4 border-b-4 border-border">
-            <EquityCurve />
-          </div>
-        )}
+        <div className="px-4 lg:px-6 py-4 border-b-4 border-border">
+          <EquityCurve />
+        </div>
 
         {/* FILTERS */}
         <div className="px-4 lg:px-6 py-3 border-b border-border/50 flex items-center gap-3 flex-wrap">

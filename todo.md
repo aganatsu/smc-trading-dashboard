@@ -54,3 +54,8 @@
 ## Remaining Improvements
 - [x] Add daily/weekly/monthly P&L breakdown view in equity curve section
 - [x] Add one-click trade execution button in Risk Management panel that pre-fills BrokerPanel
+
+## Remove Login Requirement
+- [x] Make Dashboard the default route without auth check
+- [x] Remove login redirect from main pages
+- [x] Make trade journal and broker routes work without auth
