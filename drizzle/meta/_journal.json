@@ -15,6 +15,13 @@
       "when": 1775963954883,
       "tag": "0001_nasty_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775964729525,
+      "tag": "0002_lethal_wallow",
+      "breakpoints": true
     }
   ]
 }

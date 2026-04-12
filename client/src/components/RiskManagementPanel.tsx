@@ -6,14 +6,23 @@
 import { useState, useMemo } from 'react';
 import type { AnalysisResult } from '@/lib/smcAnalysis';
 import type { Instrument } from '@/lib/marketData';
+import { Zap } from 'lucide-react';
 
 interface Props {
   analysis: AnalysisResult | null;
   instrument: Instrument;
   currentPrice: number;
+  onExecuteTrade?: (params: {
+    symbol: string;
+    direction: 'long' | 'short';
+    entry: string;
+    stopLoss: string;
+    takeProfit: string;
+    positionSize: string;
+  }) => void;
 }
 
-export default function RiskManagementPanel({ analysis, instrument, currentPrice }: Props) {
+export default function RiskManagementPanel({ analysis, instrument, currentPrice, onExecuteTrade }: Props) {
   const [accountSize, setAccountSize] = useState(10000);
   const [riskPercent, setRiskPercent] = useState(1);
   const [entryPrice, setEntryPrice] = useState(0);
@@ -52,11 +61,34 @@ export default function RiskManagementPanel({ analysis, instrument, currentPrice
   const slPips = slDistance / pipValue;
   const positionSize = slPips > 0 ? riskAmount / slPips : 0;
 
+  const direction = analysis?.entryChecklist?.bias === 'bullish' ? 'long' 
+    : analysis?.entryChecklist?.bias === 'bearish' ? 'short' 
+    : 'long';
+
   const formatPrice = (price: number): string => {
     if (instrument.type === 'crypto') return price.toFixed(2);
     if (instrument.symbol.includes('JPY')) return price.toFixed(3);
     if (instrument.type === 'commodity') return price.toFixed(2);
     return price.toFixed(5);
+  };
+
+  const positionSizeDisplay = instrument.type === 'forex' 
+    ? `${(positionSize / 100000).toFixed(2)} lots` 
+    : instrument.type === 'crypto' 
+    ? `${positionSize.toFixed(6)} units` 
+    : `${positionSize.toFixed(2)} units`;
+
+  const handleExecuteClick = () => {
+    if (onExecuteTrade) {
+      onExecuteTrade({
+        symbol: instrument.displaySymbol,
+        direction,
+        entry: formatPrice(entryPrice),
+        stopLoss: formatPrice(stopLoss),
+        takeProfit: formatPrice(takeProfit),
+        positionSize: Math.round(positionSize).toString(),
+      });
+    }
   };
 
   return (
@@ -163,13 +195,32 @@ export default function RiskManagementPanel({ analysis, instrument, currentPrice
             <div className="flex items-center justify-between px-2 py-1.5 bg-cyan/5 border-l-2 border-l-cyan">
               <span className="text-[10px] font-mono text-muted-foreground">POSITION SIZE</span>
               <span className="text-sm font-bold font-mono text-cyan">
-                {instrument.type === 'forex' ? `${(positionSize / 100000).toFixed(2)} lots` :
-                 instrument.type === 'crypto' ? `${positionSize.toFixed(6)} units` :
-                 `${positionSize.toFixed(2)} units`}
+                {positionSizeDisplay}
               </span>
             </div>
           </div>
         </div>
+
+        {/* One-Click Execute Button */}
+        {onExecuteTrade && (
+          <button
+            onClick={handleExecuteClick}
+            disabled={!entryPrice || !stopLoss || !takeProfit || rrRatio < 1}
+            className={`w-full py-3 font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+              direction === 'long'
+                ? 'bg-bullish/90 hover:bg-bullish text-black disabled:bg-bullish/30 disabled:text-bullish/50'
+                : 'bg-bearish/90 hover:bg-bearish text-white disabled:bg-bearish/30 disabled:text-bearish/50'
+            } disabled:cursor-not-allowed`}
+          >
+            <Zap className="w-4 h-4" />
+            {direction === 'long' ? 'EXECUTE BUY' : 'EXECUTE SELL'} — {positionSizeDisplay}
+          </button>
+        )}
+        {onExecuteTrade && rrRatio < 1 && entryPrice > 0 && stopLoss > 0 && takeProfit > 0 && (
+          <p className="text-[9px] font-mono text-bearish text-center">
+            R:R below 1:1 — adjust TP or SL before executing
+          </p>
+        )}
 
         {/* Exit Checklist */}
         <div>

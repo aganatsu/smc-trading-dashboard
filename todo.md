@@ -27,3 +27,30 @@
 - [x] Add trade statistics summary (win rate, total P&L, avg R:R)
 - [x] Add navigation to Trade Journal from dashboard
 - [x] Write vitest tests for trade journal backend
+
+## Broker Integration (OANDA + HFM)
+- [x] Research OANDA REST API v20 for order placement and account info
+- [x] Research HFM (HotForex) API capabilities (MetaApi.cloud bridge)
+- [x] Build backend broker connection service (OANDA)
+- [x] Build backend broker connection service (HFM via MetaApi)
+- [x] Create tRPC routes for broker operations (connect, place order, get positions, account info)
+- [x] Build frontend BrokerPanel (connect, view account, place orders, close positions)
+- [x] Integrate BrokerPanel into Dashboard as Trade Execution panel
+- [x] Add broker account balance/positions display
+
+## Chart Screenshots for Journal
+- [x] Add screenshot upload endpoint (base64 to S3)
+- [x] Update trades schema to include screenshotUrl field
+- [x] Build ScreenshotCapture component (upload, drag-drop, paste, preview)
+- [x] Integrate screenshot capture into Trade Journal form
+- [x] Display screenshots in trade journal expanded view
+
+## Equity Curve Visualization
+- [x] Build EquityCurve component using Recharts (area chart + per-trade P&L bars)
+- [x] Create equityCurve tRPC endpoint (cumulative P&L from closed trades)
+- [x] Integrate equity curve into Trade Journal page
+- [x] Write vitest tests for broker, screenshot, and equity curve features
+
+## Remaining Improvements
+- [x] Add daily/weekly/monthly P&L breakdown view in equity curve section
+- [x] Add one-click trade execution button in Risk Management panel that pre-fills BrokerPanel

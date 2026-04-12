@@ -4,7 +4,21 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { fetchCandlesFromYahoo, fetchQuoteFromYahoo } from "./marketData";
-import { createTrade, getTradesByUser, getTradeById, updateTrade, deleteTrade, getTradeStats } from "./db";
+import {
+  createTrade, getTradesByUser, getTradeById, updateTrade, deleteTrade, getTradeStats,
+  createBrokerConnection, getBrokerConnectionsByUser, getBrokerConnectionById,
+  updateBrokerConnection, deleteBrokerConnection, getClosedTradesForEquityCurve,
+} from "./db";
+import {
+  getOandaAccounts, getOandaAccountSummary, getOandaOpenPositions,
+  getOandaOpenTrades, placeOandaMarketOrder, closeOandaTrade,
+} from "./brokers/oanda";
+import {
+  getMetaApiAccounts, getMetaApiAccountInfo, getMetaApiPositions,
+  placeMetaApiMarketOrder, closeMetaApiPosition,
+} from "./brokers/metaapi";
+import { storagePut } from "./storage";
+import { nanoid } from "nanoid";
 
 export const appRouter = router({
   system: systemRouter,
@@ -65,6 +79,21 @@ export const appRouter = router({
       return getTradeStats(ctx.user.id);
     }),
 
+    equityCurve: protectedProcedure.query(async ({ ctx }) => {
+      const closedTrades = await getClosedTradesForEquityCurve(ctx.user.id);
+      let cumulative = 0;
+      return closedTrades.map((t) => {
+        cumulative += t.pnlAmount ? parseFloat(t.pnlAmount) : 0;
+        return {
+          id: t.id,
+          date: t.exitTime,
+          pnl: t.pnlAmount ? parseFloat(t.pnlAmount) : 0,
+          cumulative,
+          symbol: t.symbol,
+        };
+      });
+    }),
+
     create: protectedProcedure
       .input(
         z.object({
@@ -86,6 +115,7 @@ export const appRouter = router({
           notes: z.string().optional(),
           deviations: z.string().optional(),
           improvements: z.string().optional(),
+          screenshotUrl: z.string().optional(),
           entryTime: z.date(),
           exitTime: z.date().optional(),
         })
@@ -108,6 +138,7 @@ export const appRouter = router({
           notes: input.notes ?? null,
           deviations: input.deviations ?? null,
           improvements: input.improvements ?? null,
+          screenshotUrl: input.screenshotUrl ?? null,
           exitTime: input.exitTime ?? null,
         });
         return { id };
@@ -135,6 +166,7 @@ export const appRouter = router({
           notes: z.string().nullable().optional(),
           deviations: z.string().nullable().optional(),
           improvements: z.string().nullable().optional(),
+          screenshotUrl: z.string().nullable().optional(),
           entryTime: z.date().optional(),
           exitTime: z.date().nullable().optional(),
         })
@@ -150,6 +182,257 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await deleteTrade(input.id, ctx.user.id);
         return { success: true };
+      }),
+
+    uploadScreenshot: protectedProcedure
+      .input(
+        z.object({
+          imageData: z.string(), // base64 encoded image
+          tradeId: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.imageData, "base64");
+        const fileKey = `screenshots/${ctx.user.id}/${nanoid()}.png`;
+        const { url } = await storagePut(fileKey, buffer, "image/png");
+
+        if (input.tradeId) {
+          await updateTrade(input.tradeId, ctx.user.id, { screenshotUrl: url });
+        }
+
+        return { url };
+      }),
+  }),
+
+  broker: router({
+    // Connection management
+    connections: protectedProcedure.query(async ({ ctx }) => {
+      const conns = await getBrokerConnectionsByUser(ctx.user.id);
+      // Mask API keys in response
+      return conns.map((c) => ({
+        ...c,
+        apiKey: c.apiKey.substring(0, 8) + "..." + c.apiKey.substring(c.apiKey.length - 4),
+      }));
+    }),
+
+    addConnection: protectedProcedure
+      .input(
+        z.object({
+          brokerType: z.enum(["oanda", "metaapi"]),
+          displayName: z.string().min(1),
+          apiKey: z.string().min(1),
+          accountId: z.string().min(1),
+          isLive: z.boolean().default(false),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Validate the connection by testing it
+        try {
+          if (input.brokerType === "oanda") {
+            await getOandaAccountSummary({
+              apiKey: input.apiKey,
+              accountId: input.accountId,
+              isLive: input.isLive,
+            });
+          } else {
+            await getMetaApiAccountInfo({
+              token: input.apiKey,
+              accountId: input.accountId,
+            });
+          }
+        } catch (error: any) {
+          throw new Error(`Failed to connect: ${error.message || "Invalid credentials"}`);
+        }
+
+        const id = await createBrokerConnection({
+          userId: ctx.user.id,
+          brokerType: input.brokerType,
+          displayName: input.displayName,
+          apiKey: input.apiKey,
+          accountId: input.accountId,
+          isLive: input.isLive,
+        });
+
+        return { id };
+      }),
+
+    removeConnection: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteBrokerConnection(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    // Account info
+    accountInfo: protectedProcedure
+      .input(z.object({ connectionId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getBrokerConnectionById(input.connectionId, ctx.user.id);
+        if (!conn) throw new Error("Connection not found");
+
+        if (conn.brokerType === "oanda") {
+          const summary = await getOandaAccountSummary({
+            apiKey: conn.apiKey,
+            accountId: conn.accountId,
+            isLive: conn.isLive,
+          });
+          return {
+            broker: "oanda",
+            balance: parseFloat(summary.balance),
+            unrealizedPL: parseFloat(summary.unrealizedPL),
+            nav: parseFloat(summary.NAV),
+            marginUsed: parseFloat(summary.marginUsed),
+            marginAvailable: parseFloat(summary.marginAvailable),
+            openTradeCount: summary.openTradeCount,
+            currency: summary.currency,
+          };
+        } else {
+          const info = await getMetaApiAccountInfo({
+            token: conn.apiKey,
+            accountId: conn.accountId,
+          });
+          return {
+            broker: "metaapi",
+            balance: info.balance,
+            unrealizedPL: info.equity - info.balance,
+            nav: info.equity,
+            marginUsed: info.margin,
+            marginAvailable: info.freeMargin,
+            openTradeCount: 0,
+            currency: info.currency,
+          };
+        }
+      }),
+
+    // Open positions
+    positions: protectedProcedure
+      .input(z.object({ connectionId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getBrokerConnectionById(input.connectionId, ctx.user.id);
+        if (!conn) throw new Error("Connection not found");
+
+        if (conn.brokerType === "oanda") {
+          const trades = await getOandaOpenTrades({
+            apiKey: conn.apiKey,
+            accountId: conn.accountId,
+            isLive: conn.isLive,
+          });
+          return trades.map((t: any) => ({
+            id: t.id,
+            symbol: t.instrument.replace("_", "/"),
+            direction: parseInt(t.currentUnits) > 0 ? "long" : "short",
+            units: Math.abs(parseInt(t.currentUnits)),
+            entryPrice: parseFloat(t.price),
+            unrealizedPL: parseFloat(t.unrealizedPL),
+            openTime: t.openTime,
+          }));
+        } else {
+          const positions = await getMetaApiPositions({
+            token: conn.apiKey,
+            accountId: conn.accountId,
+          });
+          return positions.map((p: any) => ({
+            id: p.id,
+            symbol: p.symbol,
+            direction: p.type === "POSITION_TYPE_BUY" ? "long" : "short",
+            units: p.volume,
+            entryPrice: p.openPrice,
+            unrealizedPL: p.profit,
+            openTime: p.time,
+          }));
+        }
+      }),
+
+    // Place a market order
+    placeOrder: protectedProcedure
+      .input(
+        z.object({
+          connectionId: z.number(),
+          symbol: z.string(),
+          direction: z.enum(["long", "short"]),
+          units: z.number(), // For OANDA: number of units. For MetaApi: lot size
+          stopLoss: z.string().optional(),
+          takeProfit: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getBrokerConnectionById(input.connectionId, ctx.user.id);
+        if (!conn) throw new Error("Connection not found");
+
+        if (conn.brokerType === "oanda") {
+          const units = input.direction === "long" ? input.units : -input.units;
+          const result = await placeOandaMarketOrder(
+            {
+              apiKey: conn.apiKey,
+              accountId: conn.accountId,
+              isLive: conn.isLive,
+            },
+            {
+              symbol: input.symbol,
+              units,
+              stopLoss: input.stopLoss,
+              takeProfit: input.takeProfit,
+            }
+          );
+          return {
+            success: true,
+            orderId: result.orderFillTransaction?.id || result.orderCreateTransaction?.id,
+            details: result,
+          };
+        } else {
+          const result = await placeMetaApiMarketOrder(
+            {
+              token: conn.apiKey,
+              accountId: conn.accountId,
+            },
+            {
+              symbol: input.symbol,
+              direction: input.direction,
+              volume: input.units,
+              stopLoss: input.stopLoss ? parseFloat(input.stopLoss) : undefined,
+              takeProfit: input.takeProfit ? parseFloat(input.takeProfit) : undefined,
+            }
+          );
+          return {
+            success: true,
+            orderId: result.orderId,
+            details: result,
+          };
+        }
+      }),
+
+    // Close a position
+    closePosition: protectedProcedure
+      .input(
+        z.object({
+          connectionId: z.number(),
+          positionId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getBrokerConnectionById(input.connectionId, ctx.user.id);
+        if (!conn) throw new Error("Connection not found");
+
+        if (conn.brokerType === "oanda") {
+          const result = await closeOandaTrade(
+            {
+              apiKey: conn.apiKey,
+              accountId: conn.accountId,
+              isLive: conn.isLive,
+            },
+            input.positionId
+          );
+          return { success: true, details: result };
+        } else {
+          const result = await closeMetaApiPosition(
+            {
+              token: conn.apiKey,
+              accountId: conn.accountId,
+            },
+            input.positionId
+          );
+          return { success: true, details: result };
+        }
       }),
   }),
 });

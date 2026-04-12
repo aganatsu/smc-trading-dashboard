@@ -1,6 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, trades, InsertTrade, Trade } from "../drizzle/schema";
+import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -177,4 +177,75 @@ export async function getTradeStats(userId: number) {
     avgRR,
     strategyAdherence,
   };
+}
+
+// ── Broker Connection Queries ──
+
+export async function createBrokerConnection(conn: InsertBrokerConnection): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(brokerConnections).values(conn);
+  return result[0].insertId;
+}
+
+export async function getBrokerConnectionsByUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(brokerConnections)
+    .where(eq(brokerConnections.userId, userId))
+    .orderBy(desc(brokerConnections.createdAt));
+}
+
+export async function getBrokerConnectionById(connId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .select()
+    .from(brokerConnections)
+    .where(and(eq(brokerConnections.id, connId), eq(brokerConnections.userId, userId)))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateBrokerConnection(connId: number, userId: number, data: Partial<InsertBrokerConnection>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(brokerConnections)
+    .set(data)
+    .where(and(eq(brokerConnections.id, connId), eq(brokerConnections.userId, userId)));
+}
+
+export async function deleteBrokerConnection(connId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(brokerConnections)
+    .where(and(eq(brokerConnections.id, connId), eq(brokerConnections.userId, userId)));
+}
+
+// ── Equity Curve Query ──
+
+export async function getClosedTradesForEquityCurve(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select({
+      id: trades.id,
+      exitTime: trades.exitTime,
+      pnlAmount: trades.pnlAmount,
+      symbol: trades.symbol,
+    })
+    .from(trades)
+    .where(and(eq(trades.userId, userId), eq(trades.status, "closed")))
+    .orderBy(trades.exitTime);
 }

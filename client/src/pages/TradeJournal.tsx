@@ -12,8 +12,10 @@ import { toast } from "sonner";
 import {
   Zap, ArrowLeft, Plus, X, TrendingUp, TrendingDown, Target,
   Trophy, BarChart3, CheckCircle, XCircle, Edit2, Trash2, BookOpen,
-  Filter, ChevronDown, ChevronUp
+  Filter, ChevronDown, ChevronUp, Image as ImageIcon
 } from "lucide-react";
+import EquityCurve from "@/components/EquityCurve";
+import ScreenshotCapture from "@/components/ScreenshotCapture";
 
 type TradeDirection = "long" | "short";
 type TradeStatus = "open" | "closed" | "cancelled";
@@ -57,6 +59,7 @@ interface TradeFormData {
   improvements: string;
   entryTime: string;
   exitTime: string;
+  screenshotUrl: string;
 }
 
 const emptyForm: TradeFormData = {
@@ -80,6 +83,7 @@ const emptyForm: TradeFormData = {
   improvements: "",
   entryTime: new Date().toISOString().slice(0, 16),
   exitTime: "",
+  screenshotUrl: "",
 };
 
 export default function TradeJournal() {
@@ -164,6 +168,7 @@ export default function TradeJournal() {
       notes: form.notes || undefined,
       deviations: form.deviations || undefined,
       improvements: form.improvements || undefined,
+      screenshotUrl: form.screenshotUrl || undefined,
       entryTime: new Date(form.entryTime),
       exitTime: form.exitTime ? new Date(form.exitTime) : undefined,
     };
@@ -197,6 +202,7 @@ export default function TradeJournal() {
       improvements: trade.improvements || "",
       entryTime: trade.entryTime ? new Date(trade.entryTime).toISOString().slice(0, 16) : "",
       exitTime: trade.exitTime ? new Date(trade.exitTime).toISOString().slice(0, 16) : "",
+      screenshotUrl: trade.screenshotUrl || "",
     });
     setEditingId(trade.id);
     setShowForm(true);
@@ -320,6 +326,13 @@ export default function TradeJournal() {
               <span>Losses: <span className="text-bearish">{stats.losses}</span></span>
               <span>BE: <span className="text-foreground">{stats.breakeven}</span></span>
             </div>
+          </div>
+        )}
+
+        {/* EQUITY CURVE */}
+        {isAuthenticated && (
+          <div className="px-4 lg:px-6 py-4 border-b-4 border-border">
+            <EquityCurve />
           </div>
         )}
 
@@ -650,6 +663,13 @@ export default function TradeJournal() {
                 </FormField>
               </div>
 
+              {/* Row 9: Screenshot */}
+              <ScreenshotCapture
+                tradeId={editingId || undefined}
+                currentUrl={form.screenshotUrl || null}
+                onScreenshotUploaded={(url) => setForm({ ...form, screenshotUrl: url })}
+              />
+
               {/* Submit */}
               <div className="flex gap-3 pt-2">
                 <button
@@ -839,6 +859,22 @@ function TradeRow({
             <div className="mb-3">
               <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Improvements</span>
               <p className="text-xs font-mono text-foreground mt-1">{trade.improvements}</p>
+            </div>
+          )}
+
+          {trade.screenshotUrl && (
+            <div className="mb-3">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <ImageIcon className="w-3 h-3" />
+                Chart Screenshot
+              </span>
+              <a href={trade.screenshotUrl} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={trade.screenshotUrl}
+                  alt="Trade chart screenshot"
+                  className="w-full max-h-60 object-cover border-2 border-border hover:border-cyan/50 transition-colors cursor-pointer"
+                />
+              </a>
             </div>
           )}
 

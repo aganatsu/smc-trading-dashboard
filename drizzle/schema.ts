@@ -71,6 +71,8 @@ export const trades = mysqlTable("trades", {
   entryTime: timestamp("entryTime").notNull(),
   /** Trade exit timestamp */
   exitTime: timestamp("exitTime"),
+  /** Screenshot URL from S3 */
+  screenshotUrl: text("screenshotUrl"),
   /** Record timestamps */
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -78,3 +80,28 @@ export const trades = mysqlTable("trades", {
 
 export type Trade = typeof trades.$inferSelect;
 export type InsertTrade = typeof trades.$inferInsert;
+
+/**
+ * Broker connections — stores encrypted API credentials for each user's broker accounts.
+ */
+export const brokerConnections = mysqlTable("broker_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** Broker type */
+  brokerType: mysqlEnum("brokerType", ["oanda", "metaapi"]).notNull(),
+  /** Display name for this connection */
+  displayName: varchar("displayName", { length: 128 }).notNull(),
+  /** API key / token (encrypted at rest) */
+  apiKey: text("apiKey").notNull(),
+  /** Broker account ID */
+  accountId: varchar("accountId", { length: 128 }).notNull(),
+  /** Whether this is a live or practice/demo account */
+  isLive: boolean("isLive").default(false).notNull(),
+  /** Whether this connection is active */
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BrokerConnection = typeof brokerConnections.$inferSelect;
+export type InsertBrokerConnection = typeof brokerConnections.$inferInsert;

@@ -22,11 +22,12 @@ import KeyLevelsPanel from '@/components/KeyLevelsPanel';
 import EntryChecklistPanel from '@/components/EntryChecklistPanel';
 import RiskManagementPanel from '@/components/RiskManagementPanel';
 import AlertGeneratorPanel from '@/components/AlertGeneratorPanel';
+import BrokerPanel from '@/components/BrokerPanel';
 import { RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell, BookOpen } from 'lucide-react';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { useLocation } from 'wouter';
 
-type BottomTab = 'structure' | 'levels' | 'checklist' | 'risk' | 'alerts';
+type BottomTab = 'structure' | 'levels' | 'checklist' | 'risk' | 'alerts' | 'broker';
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -42,6 +43,17 @@ export default function Dashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<BottomTab>('checklist');
+  const [brokerPrefill, setBrokerPrefill] = useState<{
+    symbol: string; direction: 'long' | 'short'; entry: string; stopLoss: string; takeProfit: string; positionSize: string;
+  } | null>(null);
+
+  const handleExecuteTrade = useCallback((params: {
+    symbol: string; direction: 'long' | 'short'; entry: string; stopLoss: string; takeProfit: string; positionSize: string;
+  }) => {
+    setBrokerPrefill(params);
+    setActivePanel('broker');
+    toast.info('Trade parameters sent to Broker Panel');
+  }, []);
 
   // Multi-timeframe analysis state
   const [weeklyTrend, setWeeklyTrend] = useState<string>('—');
@@ -120,6 +132,7 @@ export default function Dashboard() {
     { key: 'checklist', label: 'CHECKLIST' },
     { key: 'risk', label: 'RISK' },
     { key: 'alerts', label: 'ALERTS', icon: <Bell className="w-3 h-3" /> },
+    { key: 'broker', label: 'TRADE', icon: <Zap className="w-3 h-3" /> },
   ];
 
   return (
@@ -372,8 +385,8 @@ export default function Dashboard() {
               </div>
 
               {/* ANALYSIS PANELS */}
-              {/* Desktop: 5-column grid with alert panel */}
-              <div className="hidden lg:grid h-[45%] grid-cols-5 overflow-hidden">
+              {/* Desktop: 6-column grid with broker panel */}
+              <div className="hidden lg:grid h-[45%] grid-cols-6 overflow-hidden">
                 <div className="border-r-4 border-border overflow-y-auto">
                   <MarketStructurePanel
                     analysis={analysis}
@@ -389,10 +402,20 @@ export default function Dashboard() {
                   <EntryChecklistPanel analysis={analysis} />
                 </div>
                 <div className="border-r-4 border-border overflow-y-auto">
-                  <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                  <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} onExecuteTrade={handleExecuteTrade} />
                 </div>
-                <div className="overflow-y-auto">
+                <div className="border-r-4 border-border overflow-y-auto">
                   <AlertGeneratorPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                </div>
+                <div className="overflow-y-auto p-3">
+                  <BrokerPanel
+                    symbol={selectedInstrument.displaySymbol}
+                    entryPrice={quote?.price?.toString() || ''}
+                    stopLoss={analysis?.fibLevels?.find((l: any) => l.label === '0%')?.price?.toString() || ''}
+                    takeProfit={analysis?.fibLevels?.find((l: any) => l.label === '100%')?.price?.toString() || ''}
+                    direction={analysis?.structure?.trend === 'bullish' ? 'long' : analysis?.structure?.trend === 'bearish' ? 'short' : 'long'}
+                    positionSize="1000"
+                  />
                 </div>
               </div>
 
@@ -432,10 +455,22 @@ export default function Dashboard() {
                     <EntryChecklistPanel analysis={analysis} />
                   )}
                   {activePanel === 'risk' && (
-                    <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                    <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} onExecuteTrade={handleExecuteTrade} />
                   )}
                   {activePanel === 'alerts' && (
                     <AlertGeneratorPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                  )}
+                  {activePanel === 'broker' && (
+                    <div className="p-3">
+                      <BrokerPanel
+                        symbol={selectedInstrument.displaySymbol}
+                        entryPrice={quote?.price?.toString() || ''}
+                        stopLoss={analysis?.fibLevels?.find((l: any) => l.label === '0%')?.price?.toString() || ''}
+                        takeProfit={analysis?.fibLevels?.find((l: any) => l.label === '100%')?.price?.toString() || ''}
+                        direction={analysis?.structure?.trend === 'bullish' ? 'long' : analysis?.structure?.trend === 'bearish' ? 'short' : 'long'}
+                        positionSize="1000"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
