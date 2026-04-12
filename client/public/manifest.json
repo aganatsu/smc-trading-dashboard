@@ -1,0 +1,25 @@
+{
+  "name": "SMC Trading Dashboard",
+  "short_name": "SMC Trader",
+  "description": "AI-powered Smart Money Concepts trading analysis dashboard with TradingView integration",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#00E5FF",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663396688007/PwCAeJJrP2fr2xjEGgMb7w/pwa-icon-192-jHu2nzZ96QLmiHUpgNGpMc.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663396688007/PwCAeJJrP2fr2xjEGgMb7w/pwa-icon-512-TYLzHV2QCNkJnethBF8vyp.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "utilities"]
+}

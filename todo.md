@@ -11,3 +11,19 @@
 - [x] Test all instruments: Forex pairs, BTC, Gold
 - [x] Verify SMC analysis still works correctly with Yahoo Finance data
 - [x] Save checkpoint
+
+## PWA Support
+- [x] Create web app manifest (manifest.json) with app name, icons, theme colors
+- [x] Generate PWA icons (192x192, 512x512)
+- [x] Add service worker for offline caching
+- [x] Add install prompt/button in the dashboard UI
+- [x] Register manifest and service worker in index.html
+
+## Trade Journal
+- [x] Create trade journal database schema (trades table)
+- [x] Create backend tRPC routes for CRUD operations on trades
+- [x] Build Trade Journal page/panel UI with trade list
+- [x] Build Add/Edit Trade form (symbol, entry/exit price, direction, notes, strategy adherence, P&L)
+- [x] Add trade statistics summary (win rate, total P&L, avg R:R)
+- [x] Add navigation to Trade Journal from dashboard
+- [x] Write vitest tests for trade journal backend

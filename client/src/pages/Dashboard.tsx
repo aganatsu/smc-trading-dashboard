@@ -22,11 +22,14 @@ import KeyLevelsPanel from '@/components/KeyLevelsPanel';
 import EntryChecklistPanel from '@/components/EntryChecklistPanel';
 import RiskManagementPanel from '@/components/RiskManagementPanel';
 import AlertGeneratorPanel from '@/components/AlertGeneratorPanel';
-import { RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell } from 'lucide-react';
+import { RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell, BookOpen } from 'lucide-react';
+import { PwaInstallButton } from '@/components/PwaInstallButton';
+import { useLocation } from 'wouter';
 
 type BottomTab = 'structure' | 'levels' | 'checklist' | 'risk' | 'alerts';
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument>(INSTRUMENTS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('4h');
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -315,6 +318,20 @@ export default function Dashboard() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
+
+            {/* Trade Journal */}
+            <button
+              onClick={() => setLocation('/journal')}
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-muted-foreground hover:text-cyan border border-border hover:border-cyan/30 transition-all"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Journal
+            </button>
+
+            {/* PWA Install */}
+            <div className="hidden lg:block">
+              <PwaInstallButton />
+            </div>
 
             {/* Last Updated — hidden on mobile */}
             {lastUpdated && (
