@@ -2,24 +2,30 @@
  * SMC Trading Dashboard — Main Page
  * Design: Obsidian Forge — Dark Brutalist Trading Interface
  * 
- * Layout: Left sidebar (instrument selector) + Main area (chart top 55%, analysis grid bottom 45%)
+ * Layout: Left sidebar (instrument selector) + Main area (TradingView chart top 55%, analysis grid bottom 45%)
  * Colors: Deep charcoal #0A0A0F, electric cyan #00E5FF accent, sharp 0px radius everywhere
  * Mobile: Sidebar collapses, analysis panels stack vertically
+ * 
+ * TradingView Advanced Chart widget replaces lightweight-charts for full charting experience.
+ * SMC analysis engine still runs on Twelve Data API for order blocks, FVGs, liquidity, etc.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { INSTRUMENTS, TIMEFRAMES, fetchCandles, fetchQuote, getApiKey, setApiKey, hasCustomApiKey } from '@/lib/marketData';
+import { INSTRUMENTS, TIMEFRAMES, fetchCandles, fetchQuote, setApiKey, hasCustomApiKey } from '@/lib/marketData';
 import type { Instrument, Timeframe } from '@/lib/marketData';
 import type { Candle, AnalysisResult } from '@/lib/smcAnalysis';
 import { runFullAnalysis } from '@/lib/smcAnalysis';
-import CandlestickChart from '@/components/CandlestickChart';
+import TradingViewChart from '@/components/TradingViewChart';
 import MarketStructurePanel from '@/components/MarketStructurePanel';
 import KeyLevelsPanel from '@/components/KeyLevelsPanel';
 import EntryChecklistPanel from '@/components/EntryChecklistPanel';
 import RiskManagementPanel from '@/components/RiskManagementPanel';
+import AlertGeneratorPanel from '@/components/AlertGeneratorPanel';
 import ApiKeyModal from '@/components/ApiKeyModal';
-import { Settings, RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X } from 'lucide-react';
+import { Settings, RefreshCw, Zap, TrendingUp, TrendingDown, Minus, Search, Menu, X, Bell, BarChart3 } from 'lucide-react';
+
+type BottomTab = 'structure' | 'levels' | 'checklist' | 'risk' | 'alerts';
 
 export default function Dashboard() {
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument>(INSTRUMENTS[0]);
@@ -34,7 +40,8 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState<'structure' | 'levels' | 'checklist' | 'risk'>('checklist');
+  const [activePanel, setActivePanel] = useState<BottomTab>('checklist');
+  const [showAlertPanel, setShowAlertPanel] = useState(false);
 
   // Multi-timeframe analysis state
   const [weeklyTrend, setWeeklyTrend] = useState<string>('—');
@@ -111,11 +118,12 @@ export default function Dashboard() {
     return 'text-muted-foreground';
   };
 
-  const panelTabs = [
-    { key: 'structure' as const, label: 'STRUCTURE' },
-    { key: 'levels' as const, label: 'LEVELS' },
-    { key: 'checklist' as const, label: 'CHECKLIST' },
-    { key: 'risk' as const, label: 'RISK' },
+  const panelTabs: { key: BottomTab; label: string; icon?: React.ReactNode }[] = [
+    { key: 'structure', label: 'STRUCTURE' },
+    { key: 'levels', label: 'LEVELS' },
+    { key: 'checklist', label: 'CHECKLIST' },
+    { key: 'risk', label: 'RISK' },
+    { key: 'alerts', label: 'ALERTS', icon: <Bell className="w-3 h-3" /> },
   ];
 
   return (
@@ -372,19 +380,18 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {/* CHART AREA */}
+              {/* TRADINGVIEW CHART AREA */}
               <div className="h-[50%] lg:h-[55%] border-b-4 border-border">
-                <CandlestickChart
-                  candles={candles}
-                  analysis={analysis}
+                <TradingViewChart
                   instrument={selectedInstrument}
+                  timeframe={selectedTimeframe}
                   loading={loading}
                 />
               </div>
 
               {/* ANALYSIS PANELS */}
-              {/* Desktop: 4-column grid */}
-              <div className="hidden lg:grid h-[45%] grid-cols-4 overflow-hidden">
+              {/* Desktop: 5-column grid with alert panel */}
+              <div className="hidden lg:grid h-[45%] grid-cols-5 overflow-hidden">
                 <div className="border-r-4 border-border overflow-y-auto">
                   <MarketStructurePanel
                     analysis={analysis}
@@ -399,8 +406,11 @@ export default function Dashboard() {
                 <div className="border-r-4 border-border overflow-y-auto">
                   <EntryChecklistPanel analysis={analysis} />
                 </div>
-                <div className="overflow-y-auto">
+                <div className="border-r-4 border-border overflow-y-auto">
                   <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                </div>
+                <div className="overflow-y-auto">
+                  <AlertGeneratorPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
                 </div>
               </div>
 
@@ -412,12 +422,13 @@ export default function Dashboard() {
                     <button
                       key={tab.key}
                       onClick={() => setActivePanel(tab.key)}
-                      className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
+                      className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                         activePanel === tab.key
                           ? 'text-cyan border-b-2 border-cyan bg-cyan/5'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
+                      {tab.icon}
                       {tab.label}
                     </button>
                   ))}
@@ -440,6 +451,9 @@ export default function Dashboard() {
                   )}
                   {activePanel === 'risk' && (
                     <RiskManagementPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
+                  )}
+                  {activePanel === 'alerts' && (
+                    <AlertGeneratorPanel analysis={analysis} instrument={selectedInstrument} currentPrice={quote?.price || candles[candles.length - 1]?.close || 0} />
                   )}
                 </div>
               </div>
