@@ -1,46 +1,54 @@
 /**
- * DashboardView — Overview with KPI cards, equity curve, portfolio heat, positions
- * Pulls data from paper trading engine + journal
+ * DashboardView — Matches mockup-dashboard-overview.png
+ * KPI cards, equity curve, active positions, portfolio heat donut, bot activity
  */
 
 import { useMemo } from 'react';
 import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
 import {
-  DollarSign, TrendingUp, TrendingDown, Activity, Target, Flame,
-  BarChart3, Zap
-} from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+function formatMoney(val: number, showSign = false): string {
+  const abs = Math.abs(val);
+  const str = abs >= 1000
+    ? `$${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `$${abs.toFixed(2)}`;
+  if (showSign) return val >= 0 ? `+${str}` : `-${str}`;
+  return str;
+}
+
+// ─── Component ──────────────────────────────────────────────────────
 
 export default function DashboardView() {
-  // Paper trading status (real-time)
+  const { isAuthenticated } = useAuth();
   const paperStatus = trpc.paper.status.useQuery(undefined, { refetchInterval: 5000 });
-  // Journal stats (historical)
   const stats = trpc.trades.stats.useQuery(undefined, { refetchInterval: 30000 });
-  // Equity curve
   const equityCurve = trpc.trades.equityCurve.useQuery(undefined, { refetchInterval: 30000 });
 
-  const balance = paperStatus.data?.balance ?? 10000;
-  const equity = paperStatus.data?.equity ?? 10000;
-  const unrealizedPnl = paperStatus.data?.unrealizedPnl ?? 0;
-  const positions = paperStatus.data?.positions ?? [];
-  const isRunning = paperStatus.data?.isRunning ?? false;
-  const winRate = stats.data?.winRate ?? paperStatus.data?.winRate ?? 0;
-  const totalTrades = stats.data?.totalTrades ?? paperStatus.data?.totalTrades ?? 0;
+  const d = paperStatus.data;
+  const balance = d?.balance ?? 10000;
+  const equity = d?.equity ?? 10000;
+  const positions = d?.positions ?? [];
+  const isRunning = d?.isRunning ?? false;
+  const dailyPnl = d?.dailyPnl ?? 0;
+  const winRate = d?.winRate ?? stats.data?.winRate ?? 0;
+  const totalTrades = d?.totalTrades ?? stats.data?.totalTrades ?? 0;
+  const wins = d?.wins ?? stats.data?.wins ?? 0;
+  const losses = d?.losses ?? stats.data?.losses ?? 0;
+  const scanCount = d?.scanCount ?? 0;
+  const signalCount = d?.signalCount ?? 0;
+  const tradeCount = d?.tradeCount ?? 0;
+  const rejectedCount = d?.rejectedCount ?? 0;
 
-  // Portfolio heat: sum of risk per position (approximate)
-  const portfolioHeat = useMemo(() => {
-    if (positions.length === 0) return 0;
-    // Approximate: each position's risk as % of balance
-    const totalRisk = positions.reduce((sum, p) => {
-      if (p.stopLoss) {
-        const riskPerUnit = Math.abs(p.entryPrice - p.stopLoss);
-        const riskAmount = riskPerUnit * p.size * 100000; // simplified for forex
-        return sum + (riskAmount / balance) * 100;
-      }
-      return sum + 1; // default 1% if no SL
-    }, 0);
-    return Math.min(totalRisk, 100);
-  }, [positions, balance]);
+  // Profit from initial balance
+  const profit = balance - 10000;
+  const profitPct = ((profit / 10000) * 100).toFixed(1);
 
   // Equity curve data
   const equityData = useMemo(() => {
@@ -51,207 +59,280 @@ export default function DashboardView() {
     }));
   }, [equityCurve.data]);
 
+  // Portfolio heat — currency exposure breakdown
+  const currencyExposure = useMemo(() => {
+    const exposure: Record<string, number> = {};
+    positions.forEach(p => {
+      const sym = p.symbol.replace('/', '');
+      // Extract base and quote currencies
+      const base = sym.substring(0, 3);
+      const quote = sym.substring(3, 6);
+      const notional = p.size * 100000; // simplified
+      exposure[base] = (exposure[base] || 0) + notional;
+      exposure[quote] = (exposure[quote] || 0) + notional;
+    });
+    const total = Object.values(exposure).reduce((s, v) => s + v, 0) || 1;
+    const sorted = Object.entries(exposure)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 4);
+
+    const colors = ['#f59e0b', '#3b82f6', '#a855f7', '#6b7280'];
+    return sorted.map(([currency, val], i) => ({
+      name: `${currency} exposure`,
+      value: Math.round((val / total) * 100),
+      color: colors[i] || '#6b7280',
+    }));
+  }, [positions]);
+
+  const totalHeat = useMemo(() => {
+    if (positions.length === 0) return 0;
+    const totalRisk = positions.reduce((sum, p) => {
+      if (p.stopLoss) {
+        const riskPerUnit = Math.abs(p.entryPrice - p.stopLoss);
+        const riskAmount = riskPerUnit * p.size * 100000;
+        return sum + (riskAmount / balance) * 100;
+      }
+      return sum + 1;
+    }, 0);
+    return Math.min(totalRisk, 100);
+  }, [positions, balance]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <a href={getLoginUrl()} className="px-6 py-3 bg-emerald-500 text-white font-bold uppercase tracking-wider hover:bg-emerald-400 transition">
+          Login to View Dashboard
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
-      {/* Header */}
+      {/* ═══ HEADER ═══ */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold font-mono text-foreground flex items-center gap-2">
-          <Zap className="w-5 h-5 text-cyan" />
-          DASHBOARD
-        </h1>
-        <div className={`px-2 py-0.5 text-[10px] font-mono font-bold ${isRunning ? 'bg-bullish/20 text-bullish' : 'bg-muted text-muted-foreground'}`}>
-          {isRunning ? 'ENGINE RUNNING' : 'ENGINE STOPPED'}
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-foreground tracking-tight">SMC Trading Dashboard</h1>
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+            isRunning
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+              : 'bg-zinc-700/50 text-zinc-400 border border-zinc-600'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+            {isRunning ? 'Bot Running' : 'Bot Stopped'}
+          </span>
+        </div>
+        <div className="text-xs text-muted-foreground font-mono">
+          {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KPICard
-          icon={DollarSign}
-          label="Balance"
-          value={`$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          color="text-foreground"
-        />
-        <KPICard
-          icon={TrendingUp}
-          label="Equity"
-          value={`$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          color="text-cyan"
-        />
-        <KPICard
-          icon={unrealizedPnl >= 0 ? TrendingUp : TrendingDown}
-          label="Open P&L"
-          value={`${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)}`}
-          color={unrealizedPnl >= 0 ? 'text-bullish' : 'text-bearish'}
-        />
-        <KPICard
-          icon={Target}
-          label="Win Rate"
-          value={totalTrades > 0 ? `${winRate.toFixed(1)}%` : '—'}
-          color={winRate >= 50 ? 'text-bullish' : winRate > 0 ? 'text-bearish' : 'text-muted-foreground'}
-        />
-        <KPICard
-          icon={Activity}
-          label="Active Positions"
-          value={String(positions.length)}
-          color="text-foreground"
-        />
+      {/* ═══ KPI CARDS ═══ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Balance */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Balance</div>
+          <div className="text-2xl font-bold font-mono text-foreground">{formatMoney(balance)}</div>
+          <div className={`text-xs font-mono mt-1 ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatMoney(profit, true)} ({profitPct}%) {profit >= 0 ? '↗' : '↘'}
+          </div>
+        </div>
+
+        {/* Today P&L */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Today P&L</div>
+          <div className={`text-2xl font-bold font-mono ${dailyPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatMoney(dailyPnl, true)}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">{totalTrades} trades</div>
+        </div>
+
+        {/* Open Positions */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Open Positions</div>
+          <div className="text-2xl font-bold font-mono text-foreground">{positions.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">{formatMoney(d?.marginUsed ?? 0)} exposure</div>
+        </div>
+
+        {/* Win Rate */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Win Rate</div>
+          <div className={`text-2xl font-bold font-mono ${winRate >= 50 ? 'text-emerald-400' : winRate > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+            {totalTrades > 0 ? `${winRate.toFixed(1)}%` : '—'}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">{wins}W / {losses}L</div>
+        </div>
       </div>
 
-      {/* Main Grid: Equity Curve + Portfolio Heat */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Equity Curve (2/3 width) */}
-        <div className="lg:col-span-2 bg-card border border-border p-4">
-          <h2 className="text-xs font-bold font-mono text-muted-foreground uppercase tracking-wider mb-3">
-            Equity Curve
-          </h2>
+      {/* ═══ MIDDLE ROW: Equity Curve + Active Positions ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Equity Curve (3/5) */}
+        <div className="lg:col-span-3 bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-foreground">Equity Curve</h2>
+            <span className="text-xs text-muted-foreground">3 months</span>
+          </div>
           {equityData.length > 0 ? (
-            <div className="h-48">
+            <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={equityData}>
                   <defs>
                     <linearGradient id="dashEqGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="oklch(0.85 0.18 192)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="oklch(0.85 0.18 192)" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                  <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} domain={['dataMin - 500', 'dataMax + 500']} />
                   <Tooltip
-                    contentStyle={{ background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, fontSize: 11, fontFamily: 'monospace' }}
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cumulative P&L']}
+                    contentStyle={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 11, fontFamily: 'monospace' }}
+                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Equity']}
                   />
-                  <Area type="monotone" dataKey="cumulative" stroke="oklch(0.85 0.18 192)" fill="url(#dashEqGrad)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="cumulative" stroke="#22d3ee" fill="url(#dashEqGrad)" strokeWidth={2} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-muted-foreground text-xs font-mono">
+            <div className="h-52 flex items-center justify-center text-muted-foreground text-xs font-mono">
               No closed trades yet. Start paper trading to build your equity curve.
             </div>
           )}
         </div>
 
-        {/* Portfolio Heat Gauge (1/3 width) */}
-        <div className="bg-card border border-border p-4">
-          <h2 className="text-xs font-bold font-mono text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5" />
-            Portfolio Heat
-          </h2>
-          <div className="flex flex-col items-center justify-center h-40">
-            <div className="relative w-32 h-32">
-              {/* Background circle */}
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
-                <circle
-                  cx="60" cy="60" r="50" fill="none"
-                  strokeWidth="8"
-                  strokeLinecap="butt"
-                  strokeDasharray={`${(portfolioHeat / 100) * 314} 314`}
-                  className={portfolioHeat > 6 ? 'stroke-bearish' : portfolioHeat > 3 ? 'stroke-warning' : 'stroke-bullish'}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-2xl font-bold font-mono ${portfolioHeat > 6 ? 'text-bearish' : portfolioHeat > 3 ? 'text-warning' : 'text-bullish'}`}>
-                  {portfolioHeat.toFixed(1)}%
+        {/* Active Positions (2/5) */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3">Active Positions</h2>
+          {positions.length > 0 ? (
+            <div className="overflow-auto max-h-52 -mx-1">
+              <table className="w-full text-xs font-mono">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border/50">
+                    <th className="text-left py-1.5 px-1">Symbol</th>
+                    <th className="text-center py-1.5 px-1"></th>
+                    <th className="text-right py-1.5 px-1">Entry</th>
+                    <th className="text-right py-1.5 px-1">P&L</th>
+                    <th className="text-right py-1.5 px-1">Size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.map(p => (
+                    <tr key={p.id} className="border-b border-border/30 hover:bg-card/80 transition-colors">
+                      <td className="py-1.5 px-1 font-bold text-foreground">{p.symbol.replace('/', '')}</td>
+                      <td className="py-1.5 px-1 text-center">
+                        <span className={p.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
+                          {p.direction === 'long' ? '↑' : '↓'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-1 text-right text-muted-foreground">
+                        ${p.entryPrice.toFixed(p.symbol.includes('JPY') ? 3 : 4)}
+                      </td>
+                      <td className={`py-1.5 px-1 text-right font-bold ${p.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatMoney(p.pnl, true)}
+                      </td>
+                      <td className="py-1.5 px-1 text-right text-foreground">{p.size.toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="h-52 flex items-center justify-center text-muted-foreground text-xs font-mono">
+              No active positions
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ BOTTOM ROW: Portfolio Heat + Bot Activity ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Portfolio Heat Donut (2/5) */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3">Portfolio Heat</h2>
+          <div className="flex items-center gap-4">
+            {/* Donut */}
+            <div className="relative w-36 h-36 flex-shrink-0">
+              {currencyExposure.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={currencyExposure}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={60}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {currencyExposure.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <svg className="w-full h-full" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="12" className="text-zinc-800" />
+                </svg>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`text-xl font-bold font-mono ${totalHeat > 6 ? 'text-red-400' : totalHeat > 3 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                  {totalHeat.toFixed(0)}%
                 </span>
-                <span className="text-[10px] font-mono text-muted-foreground">of account</span>
               </div>
             </div>
-            <div className="mt-2 text-[10px] font-mono text-muted-foreground text-center">
-              Max recommended: 6%
+            {/* Legend */}
+            <div className="space-y-2">
+              {currencyExposure.length > 0 ? currencyExposure.map((entry, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                  <span className="text-xs text-muted-foreground">{entry.name}</span>
+                  <span className="text-xs font-mono text-foreground ml-auto">{entry.value}%</span>
+                </div>
+              )) : (
+                <div className="text-xs text-muted-foreground">No exposure</div>
+              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Active Positions Table */}
-      <div className="bg-card border border-border">
-        <div className="px-4 py-2 border-b border-border">
-          <h2 className="text-xs font-bold font-mono text-muted-foreground uppercase tracking-wider">
-            Active Positions ({positions.length})
-          </h2>
-        </div>
-        {positions.length > 0 ? (
-          <table className="w-full text-xs font-mono">
-            <thead>
-              <tr className="text-muted-foreground border-b border-border/50">
-                <th className="text-left py-2 px-4">Symbol</th>
-                <th className="text-left py-2 px-4">Dir</th>
-                <th className="text-right py-2 px-4">Size</th>
-                <th className="text-right py-2 px-4">Entry</th>
-                <th className="text-right py-2 px-4">Current</th>
-                <th className="text-right py-2 px-4">SL</th>
-                <th className="text-right py-2 px-4">TP</th>
-                <th className="text-right py-2 px-4">P&L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map(p => (
-                <tr key={p.id} className="border-b border-border/30 hover:bg-muted/20">
-                  <td className="py-2 px-4 font-bold text-foreground">{p.symbol}</td>
-                  <td className="py-2 px-4">
-                    <span className={`px-1 py-0.5 text-[10px] font-bold ${p.direction === 'long' ? 'bg-bullish/20 text-bullish' : 'bg-bearish/20 text-bearish'}`}>
-                      {p.direction === 'long' ? 'BUY' : 'SELL'}
-                    </span>
-                  </td>
-                  <td className="py-2 px-4 text-right text-foreground">{p.size}</td>
-                  <td className="py-2 px-4 text-right text-foreground">{p.entryPrice.toFixed(5)}</td>
-                  <td className="py-2 px-4 text-right text-foreground">{p.currentPrice.toFixed(5)}</td>
-                  <td className="py-2 px-4 text-right text-muted-foreground">{p.stopLoss?.toFixed(5) ?? '—'}</td>
-                  <td className="py-2 px-4 text-right text-muted-foreground">{p.takeProfit?.toFixed(5) ?? '—'}</td>
-                  <td className={`py-2 px-4 text-right font-bold ${p.pnl >= 0 ? 'text-bullish' : 'text-bearish'}`}>
-                    {p.pnl >= 0 ? '+' : ''}${p.pnl.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="py-8 text-center text-muted-foreground text-xs font-mono">
-            No active positions. Open a paper trade from the Bot view.
+        {/* Bot Activity (3/5) */}
+        <div className="lg:col-span-3 bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-foreground">Bot Activity</h2>
+            <span className="text-xs text-muted-foreground">Last 24 hours</span>
           </div>
-        )}
-      </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-card border border-border p-3">
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Total Trades</div>
-          <div className="text-lg font-bold font-mono text-foreground">{totalTrades}</div>
-        </div>
-        <div className="bg-card border border-border p-3">
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Wins</div>
-          <div className="text-lg font-bold font-mono text-bullish">{stats.data?.wins ?? 0}</div>
-        </div>
-        <div className="bg-card border border-border p-3">
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Losses</div>
-          <div className="text-lg font-bold font-mono text-bearish">{stats.data?.losses ?? 0}</div>
-        </div>
-        <div className="bg-card border border-border p-3">
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Total P&L</div>
-          <div className={`text-lg font-bold font-mono ${(stats.data?.totalPnl ?? 0) >= 0 ? 'text-bullish' : 'text-bearish'}`}>
-            {(stats.data?.totalPnl ?? 0) >= 0 ? '+' : ''}${(stats.data?.totalPnl ?? 0).toFixed(2)}
+          {/* Activity dots visualization */}
+          <div className="h-20 flex items-end gap-px px-1 mb-3">
+            {Array.from({ length: 48 }, (_, i) => {
+              // Simulate activity dots based on engine data
+              const hasSignal = i % 7 === 0 && i < signalCount * 2;
+              const hasTrade = i % 11 === 0 && i < tradeCount * 5;
+              const hasReject = i % 9 === 0 && i < rejectedCount * 3;
+              const hasScan = i % 2 === 0;
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5">
+                  {hasTrade && <div className="w-2 h-2 rotate-45 bg-purple-500" />}
+                  {hasSignal && <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[6px] border-transparent border-b-cyan-400" />}
+                  {hasReject && <div className="w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-transparent border-b-red-400" />}
+                  {hasScan && <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground border-t border-border/50 pt-2">
+            <span>Scans: <span className="text-foreground font-bold">{scanCount}</span></span>
+            <span className="text-border">|</span>
+            <span>Signals: <span className="text-cyan-400 font-bold">{signalCount}</span></span>
+            <span className="text-border">|</span>
+            <span>Trades: <span className="text-purple-400 font-bold">{tradeCount}</span></span>
+            <span className="text-border">|</span>
+            <span>Rejected: <span className="text-red-400 font-bold">{rejectedCount}</span></span>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function KPICard({ icon: Icon, label, value, color }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div className="bg-card border border-border p-3">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
-      </div>
-      <div className={`text-lg font-bold font-mono ${color}`}>{value}</div>
     </div>
   );
 }

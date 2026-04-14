@@ -24,7 +24,7 @@ import {
   placeOrder as placePaperOrder,
   closePosition as closePaperPosition,
   startEngine, pauseEngine, stopEngine, resetAccount,
-  setOwnerUserId,
+  setOwnerUserId, getLog as getPaperLog,
 } from "./paperTrading";
 
 export const appRouter = router({
@@ -478,6 +478,8 @@ export const appRouter = router({
           size: z.number().min(0.01).max(100),
           stopLoss: z.number().optional(),
           takeProfit: z.number().optional(),
+          signalReason: z.string().optional(),
+          signalScore: z.number().min(0).max(10).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -490,6 +492,10 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return closePaperPosition(input.positionId);
       }),
+
+    log: publicProcedure.query(() => {
+      return getPaperLog();
+    }),
   }),
 });
 

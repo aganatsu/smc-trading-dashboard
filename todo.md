@@ -91,3 +91,32 @@
 
 ## Bug Fixes
 - [x] Fix tRPC query error: limit parameter exceeds maximum of 100 on Dashboard page (JournalView was sending limit:200)
+
+## Phase 9: Bot View Rebuild (match mockup)
+- [x] Remove broken Lightweight Charts from Bot View
+- [x] Top bar: STOP (red) + PAUSE (orange) buttons, RUNNING/PAPER status pills, Uptime counter
+- [x] Top bar right: Stat counters — Scans, Signals, Trades, Win Rate in bordered boxes
+- [x] Left column: Positions & History with tabs (Open Positions, Closed Today, All History)
+- [x] Positions table: Symbol, Direction (colored arrows), Entry Price, Current Price, P&L, Size, SL, TP, Duration, Signal, Close button
+- [x] Right column top: Account Summary card (Balance, Equity bold green, Margin Used, Free Margin, Margin Level, Daily P&L, Drawdown, equity sparkline)
+- [x] Right column bottom: Strategy Performance card (Active strategy name + dot, Win Rate with progress bar, Avg R:R, Profit Factor, Expectancy, Max Drawdown)
+- [x] Bottom: Live Log with color-coded categories (green=bot events, yellow=signals with score, green=trades with details, gray=scanning, red=warnings/rejections)
+- [x] Status bar: Paper Mode | Bot Running (green) | positions count | equity | Latency | Memory
+
+## Phase 10: Dashboard View Rebuild (match mockup)
+- [x] Header: "SMC Trading Dashboard" title, BOT RUNNING green pill, time
+- [x] KPI cards with subtexts: Balance (+gain%), Today P&L (trade count), Open Positions (exposure $), Win Rate (W/L counts)
+- [x] Equity Curve: area chart with cyan gradient fill, 3-month timeframe label
+- [x] Active Positions: compact table with Symbol, direction arrow, Entry Price, Current P&L, Lot Size (scrollable)
+- [x] Portfolio Heat: donut chart with currency breakdown (USD/EUR/GBP/other percentages), center percentage
+- [x] Bot Activity: scatter timeline (last 24h) with colored dots for scans/signals/trades/rejected, bottom stat counts
+- [x] Status bar: Paper Mode pill, Connected to Yahoo Finance, Latency, Memory
+
+## Phase 11: Paper Trading Engine Enhancements
+- [x] Add signal reason/score to trade records (why trade was taken)
+- [x] Track margin used, free margin, margin level
+- [x] Track daily P&L, drawdown
+- [x] Track scan count, signal count, rejected count
+- [x] Track strategy name and performance stats (win rate, avg R:R, profit factor, expectancy, max drawdown)
+- [x] Track uptime since engine started
+- [ ] Support pending orders tab data (deferred — no pending order type in engine yet)

@@ -5,9 +5,14 @@
  * - Place paper market orders with SL/TP
  * - Track open positions with live P&L (via Yahoo quotes)
  * - Close positions manually or auto-close on SL/TP hit
- * - Portfolio heat calculation
+ * - Portfolio heat / margin calculation
  * - Auto-log closed trades to the journal (trades table)
  * - Trade history tracking
+ * - Signal tracking with reasons/scores
+ * - Strategy performance stats
+ * - Scan/signal/rejection counters
+ * - Uptime tracking
+ * - Terminal log with categorized entries
  */
 
 import { nanoid } from 'nanoid';
@@ -20,13 +25,16 @@ export interface PaperPosition {
   id: string;
   symbol: string;
   direction: 'long' | 'short';
-  size: number;          // lot size (e.g., 0.01 = micro lot)
+  size: number;
   entryPrice: number;
   currentPrice: number;
   pnl: number;
   stopLoss: number | null;
   takeProfit: number | null;
-  openTime: string;      // ISO string
+  openTime: string;
+  signalReason: string;   // Why the trade was taken (e.g., "RSI Oversold, MACD Crossover")
+  signalScore: number;    // Confluence score (e.g., 7.5 out of 10)
+  orderId: string;        // Order ID for tracking
 }
 
 export interface PaperTradeRecord {
@@ -41,48 +49,100 @@ export interface PaperTradeRecord {
   openTime: string;
   closedAt: string;
   closeReason: 'manual' | 'stop_loss' | 'take_profit';
+  signalReason: string;
+  signalScore: number;
+  orderId: string;
+}
+
+export type LogLevel = 'signal' | 'trade' | 'info' | 'warning' | 'error' | 'system';
+
+export interface LogEntry {
+  time: string;
+  level: LogLevel;
+  message: string;
+}
+
+export interface StrategyStats {
+  name: string;
+  winRate: number;
+  avgRR: number;
+  profitFactor: number;
+  expectancy: number;
+  maxDrawdown: number;
 }
 
 export interface PaperAccountState {
+  // Account
   balance: number;
   equity: number;
   unrealizedPnl: number;
+  marginUsed: number;
+  freeMargin: number;
+  marginLevel: number;
+  dailyPnl: number;
+  drawdown: number;
+  
+  // Positions & History
   positions: PaperPosition[];
   tradeHistory: PaperTradeRecord[];
+  
+  // Engine state
   isRunning: boolean;
+  isPaused: boolean;
+  startedAt: string | null;
+  uptime: number; // seconds
+  
+  // Counters
   totalTrades: number;
   winRate: number;
+  wins: number;
+  losses: number;
+  scanCount: number;
+  signalCount: number;
+  tradeCount: number;
+  rejectedCount: number;
+  
+  // Strategy
+  strategy: StrategyStats;
+  
+  // Log
+  log: LogEntry[];
 }
 
 // ─── Pip value helpers ───────────────────────────────────────────────
 
-// Standard lot = 100,000 units for forex, 1 unit for gold, etc.
-const INSTRUMENT_SPECS: Record<string, { pipSize: number; lotUnits: number }> = {
-  'EUR/USD': { pipSize: 0.0001, lotUnits: 100000 },
-  'GBP/USD': { pipSize: 0.0001, lotUnits: 100000 },
-  'USD/JPY': { pipSize: 0.01, lotUnits: 100000 },
-  'GBP/JPY': { pipSize: 0.01, lotUnits: 100000 },
-  'AUD/USD': { pipSize: 0.0001, lotUnits: 100000 },
-  'USD/CAD': { pipSize: 0.0001, lotUnits: 100000 },
-  'EUR/GBP': { pipSize: 0.0001, lotUnits: 100000 },
-  'NZD/USD': { pipSize: 0.0001, lotUnits: 100000 },
-  'BTC/USD': { pipSize: 1, lotUnits: 1 },
-  'ETH/USD': { pipSize: 0.01, lotUnits: 1 },
-  'XAU/USD': { pipSize: 0.01, lotUnits: 100 },   // 1 lot = 100 oz
-  'XAG/USD': { pipSize: 0.001, lotUnits: 5000 },  // 1 lot = 5000 oz
+const INSTRUMENT_SPECS: Record<string, { pipSize: number; lotUnits: number; marginPerLot: number }> = {
+  'EUR/USD': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 },
+  'GBP/USD': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 },
+  'USD/JPY': { pipSize: 0.01, lotUnits: 100000, marginPerLot: 1000 },
+  'GBP/JPY': { pipSize: 0.01, lotUnits: 100000, marginPerLot: 1500 },
+  'AUD/USD': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 800 },
+  'USD/CAD': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 },
+  'EUR/GBP': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1200 },
+  'NZD/USD': { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 700 },
+  'BTC/USD': { pipSize: 1, lotUnits: 1, marginPerLot: 5000 },
+  'ETH/USD': { pipSize: 0.01, lotUnits: 1, marginPerLot: 1000 },
+  'XAU/USD': { pipSize: 0.01, lotUnits: 100, marginPerLot: 2000 },
+  'XAG/USD': { pipSize: 0.001, lotUnits: 5000, marginPerLot: 1500 },
 };
 
 function calculatePnl(position: PaperPosition): { pnl: number; pnlPips: number } {
-  const spec = INSTRUMENT_SPECS[position.symbol] || { pipSize: 0.0001, lotUnits: 100000 };
+  const spec = INSTRUMENT_SPECS[position.symbol] || { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 };
   const priceDiff = position.direction === 'long'
     ? position.currentPrice - position.entryPrice
     : position.entryPrice - position.currentPrice;
   
   const pnlPips = priceDiff / spec.pipSize;
-  // P&L in USD: priceDiff * lotUnits * lotSize
   const pnl = priceDiff * spec.lotUnits * position.size;
   
   return { pnl, pnlPips };
+}
+
+function calculateMargin(positions: PaperPosition[]): number {
+  return positions.reduce((sum, pos) => {
+    const spec = INSTRUMENT_SPECS[pos.symbol] || { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 };
+    return sum + (spec.marginPerLot * pos.size);
+  }, 0);
 }
 
 // ─── Engine State ────────────────────────────────────────────────────
@@ -90,26 +150,106 @@ function calculatePnl(position: PaperPosition): { pnl: number; pnlPips: number }
 const INITIAL_BALANCE = 10000;
 
 let balance = INITIAL_BALANCE;
+let peakBalance = INITIAL_BALANCE;
 let positions: PaperPosition[] = [];
 let tradeHistory: PaperTradeRecord[] = [];
 let isRunning = false;
+let isPaused = false;
+let startedAt: Date | null = null;
 let priceUpdateInterval: ReturnType<typeof setInterval> | null = null;
 let ownerUserId: number | null = null;
+
+// Counters
+let scanCount = 0;
+let signalCount = 0;
+let rejectedCount = 0;
+let dailyPnlBase = 0; // balance at start of day
+let dailyPnlDate = '';
+
+// Log
+let logEntries: LogEntry[] = [];
+const MAX_LOG_ENTRIES = 200;
+
+function addLog(level: LogLevel, message: string) {
+  const entry: LogEntry = {
+    time: new Date().toISOString(),
+    level,
+    message,
+  };
+  logEntries.push(entry);
+  if (logEntries.length > MAX_LOG_ENTRIES) {
+    logEntries = logEntries.slice(-MAX_LOG_ENTRIES);
+  }
+}
+
+function resetDailyPnl() {
+  const today = new Date().toISOString().split('T')[0];
+  if (dailyPnlDate !== today) {
+    dailyPnlBase = balance;
+    dailyPnlDate = today;
+  }
+}
+
+// ─── Strategy Stats Calculation ─────────────────────────────────────
+
+function computeStrategyStats(): StrategyStats {
+  const closed = tradeHistory;
+  const wins = closed.filter(t => t.pnl > 0);
+  const losses = closed.filter(t => t.pnl <= 0);
+  
+  const winRate = closed.length > 0 ? (wins.length / closed.length) * 100 : 0;
+  
+  // Average R:R
+  const rrValues = closed.map(t => {
+    if (t.pnlPips === 0) return 0;
+    return Math.abs(t.pnlPips) / 10; // simplified
+  });
+  const avgRR = rrValues.length > 0 ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length : 0;
+  
+  // Profit Factor
+  const grossProfit = wins.reduce((sum, t) => sum + t.pnl, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, t) => sum + t.pnl, 0));
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 999 : 0;
+  
+  // Expectancy
+  const expectancy = closed.length > 0 ? closed.reduce((sum, t) => sum + t.pnl, 0) / closed.length : 0;
+  
+  // Max Drawdown
+  let peak = INITIAL_BALANCE;
+  let maxDD = 0;
+  let runningBal = INITIAL_BALANCE;
+  for (const t of closed) {
+    runningBal += t.pnl;
+    if (runningBal > peak) peak = runningBal;
+    const dd = ((peak - runningBal) / peak) * 100;
+    if (dd > maxDD) maxDD = dd;
+  }
+  
+  return {
+    name: 'SMC Default',
+    winRate,
+    avgRR: parseFloat(avgRR.toFixed(1)),
+    profitFactor: parseFloat(profitFactor.toFixed(2)),
+    expectancy: parseFloat(expectancy.toFixed(2)),
+    maxDrawdown: parseFloat(maxDD.toFixed(1)),
+  };
+}
 
 // ─── Price Update Loop ──────────────────────────────────────────────
 
 async function updatePrices() {
   if (positions.length === 0) return;
   
-  // Get unique symbols
   const symbols = Array.from(new Set(positions.map(p => p.symbol)));
+  
+  // Increment scan count
+  scanCount += symbols.length;
   
   for (const symbol of symbols) {
     try {
       const quote = await fetchQuoteFromYahoo(symbol);
       if (!quote || !quote.price) continue;
       
-      // Update all positions for this symbol
       for (const pos of positions) {
         if (pos.symbol === symbol) {
           pos.currentPrice = quote.price;
@@ -118,7 +258,7 @@ async function updatePrices() {
         }
       }
     } catch (err) {
-      // Silently skip failed quotes
+      // Silently skip
     }
   }
   
@@ -129,20 +269,32 @@ async function updatePrices() {
     if (pos.stopLoss !== null) {
       if (pos.direction === 'long' && pos.currentPrice <= pos.stopLoss) {
         toClose.push({ id: pos.id, reason: 'stop_loss' });
+        addLog('warning', `${pos.symbol} hit Stop Loss @ ${pos.stopLoss}. Closing position.`);
       } else if (pos.direction === 'short' && pos.currentPrice >= pos.stopLoss) {
         toClose.push({ id: pos.id, reason: 'stop_loss' });
+        addLog('warning', `${pos.symbol} hit Stop Loss @ ${pos.stopLoss}. Closing position.`);
       }
     }
     if (pos.takeProfit !== null) {
       if (pos.direction === 'long' && pos.currentPrice >= pos.takeProfit) {
         toClose.push({ id: pos.id, reason: 'take_profit' });
+        addLog('info', `${pos.symbol} hit Take Profit @ ${pos.takeProfit}. Closing position.`);
       } else if (pos.direction === 'short' && pos.currentPrice <= pos.takeProfit) {
         toClose.push({ id: pos.id, reason: 'take_profit' });
+        addLog('info', `${pos.symbol} hit Take Profit @ ${pos.takeProfit}. Closing position.`);
+      }
+    }
+    
+    // Log warning if approaching SL
+    if (pos.stopLoss !== null) {
+      const distToSL = Math.abs(pos.currentPrice - pos.stopLoss);
+      const totalRange = Math.abs(pos.entryPrice - pos.stopLoss);
+      if (totalRange > 0 && distToSL / totalRange < 0.2 && !toClose.find(c => c.id === pos.id)) {
+        addLog('warning', `${pos.symbol} Position Approaching Stop Loss`);
       }
     }
   }
   
-  // Close triggered positions
   for (const { id, reason } of toClose) {
     await closePositionInternal(id, reason);
   }
@@ -157,7 +309,6 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
   const pos = positions[idx];
   const { pnl, pnlPips } = calculatePnl(pos);
   
-  // Determine exit price
   let exitPrice = pos.currentPrice;
   if (reason === 'stop_loss' && pos.stopLoss !== null) {
     exitPrice = pos.stopLoss;
@@ -165,11 +316,10 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
     exitPrice = pos.takeProfit;
   }
   
-  // Recalculate with exact exit price
   const finalPriceDiff = pos.direction === 'long'
     ? exitPrice - pos.entryPrice
     : pos.entryPrice - exitPrice;
-  const spec = INSTRUMENT_SPECS[pos.symbol] || { pipSize: 0.0001, lotUnits: 100000 };
+  const spec = INSTRUMENT_SPECS[pos.symbol] || { pipSize: 0.0001, lotUnits: 100000, marginPerLot: 1000 };
   const finalPnl = finalPriceDiff * spec.lotUnits * pos.size;
   const finalPips = finalPriceDiff / spec.pipSize;
   
@@ -185,21 +335,23 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
     openTime: pos.openTime,
     closedAt: new Date().toISOString(),
     closeReason: reason,
+    signalReason: pos.signalReason,
+    signalScore: pos.signalScore,
+    orderId: pos.orderId,
   };
   
-  // Update balance
   balance += finalPnl;
+  if (balance > peakBalance) peakBalance = balance;
   
-  // Remove from positions
   positions.splice(idx, 1);
-  
-  // Add to history
   tradeHistory.push(record);
   
-  // Auto-log to journal (trades table) if we have a user ID
+  const pnlStr = finalPnl >= 0 ? `+$${finalPnl.toFixed(2)}` : `-$${Math.abs(finalPnl).toFixed(2)}`;
+  addLog('trade', `Position closed: ${pos.symbol} ${pos.direction.toUpperCase()} ${pos.size} lots. P&L: ${pnlStr}. Reason: ${reason.replace('_', ' ')}`);
+  
+  // Auto-log to journal
   if (ownerUserId) {
     try {
-      // Calculate risk-reward if SL was set
       let riskReward: string | undefined;
       if (pos.stopLoss !== null) {
         const riskPips = Math.abs(pos.entryPrice - pos.stopLoss) / spec.pipSize;
@@ -222,8 +374,8 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
         pnlPips: finalPips.toFixed(2),
         pnlAmount: finalPnl.toFixed(2),
         timeframe: '4H',
-        setupType: `Paper ${reason.replace('_', ' ')}`,
-        notes: `Paper trade auto-logged. Close reason: ${reason}`,
+        setupType: pos.signalReason || `Paper ${reason.replace('_', ' ')}`,
+        notes: `Signal score: ${pos.signalScore}/10. Close reason: ${reason}. Order ID: ${pos.orderId}`,
         entryTime: new Date(pos.openTime),
         exitTime: new Date(),
       });
@@ -242,19 +394,55 @@ export function setOwnerUserId(userId: number) {
 }
 
 export function getStatus(): PaperAccountState {
+  resetDailyPnl();
+  
   const unrealizedPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
+  const equity = balance + unrealizedPnl;
+  const marginUsed = calculateMargin(positions);
+  const freeMargin = equity - marginUsed;
+  const marginLevel = marginUsed > 0 ? (equity / marginUsed) * 100 : 0;
+  const dailyPnl = balance - dailyPnlBase + unrealizedPnl;
+  const drawdown = peakBalance > 0 ? ((peakBalance - equity) / peakBalance) * 100 : 0;
+  
   const closedTrades = tradeHistory.length;
   const wins = tradeHistory.filter(t => t.pnl > 0).length;
+  const losses = tradeHistory.filter(t => t.pnl <= 0).length;
+  
+  let uptime = 0;
+  if (startedAt && isRunning) {
+    uptime = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+  }
   
   return {
     balance,
-    equity: balance + unrealizedPnl,
+    equity,
     unrealizedPnl,
+    marginUsed,
+    freeMargin,
+    marginLevel: parseFloat(marginLevel.toFixed(0)),
+    dailyPnl,
+    drawdown: parseFloat(Math.max(0, drawdown).toFixed(1)),
+    
     positions: [...positions],
-    tradeHistory: tradeHistory.slice(-50),
+    tradeHistory: tradeHistory.slice(-100),
+    
     isRunning,
+    isPaused,
+    startedAt: startedAt?.toISOString() || null,
+    uptime,
+    
     totalTrades: closedTrades,
-    winRate: closedTrades > 0 ? (wins / closedTrades) * 100 : 0,
+    winRate: closedTrades > 0 ? parseFloat(((wins / closedTrades) * 100).toFixed(1)) : 0,
+    wins,
+    losses,
+    scanCount,
+    signalCount,
+    tradeCount: closedTrades + positions.length,
+    rejectedCount,
+    
+    strategy: computeStrategyStats(),
+    
+    log: logEntries.slice(-100),
   };
 }
 
@@ -264,20 +452,19 @@ export async function placeOrder(params: {
   size: number;
   stopLoss?: number;
   takeProfit?: number;
+  signalReason?: string;
+  signalScore?: number;
 }): Promise<{ success: boolean; position?: PaperPosition; entryPrice?: number; error?: string }> {
-  const { symbol, direction, size, stopLoss, takeProfit } = params;
+  const { symbol, direction, size, stopLoss, takeProfit, signalReason, signalScore } = params;
   
-  // Validate symbol
   if (!INSTRUMENT_SPECS[symbol]) {
     return { success: false, error: `Unsupported symbol: ${symbol}` };
   }
   
-  // Validate size
   if (size <= 0 || size > 100) {
     return { success: false, error: 'Invalid position size' };
   }
   
-  // Get current price
   try {
     const quote = await fetchQuoteFromYahoo(symbol);
     if (!quote || !quote.price) {
@@ -286,7 +473,6 @@ export async function placeOrder(params: {
     
     const entryPrice = quote.price;
     
-    // Validate SL/TP logic
     if (stopLoss !== undefined) {
       if (direction === 'long' && stopLoss >= entryPrice) {
         return { success: false, error: 'Stop loss must be below entry for long positions' };
@@ -304,6 +490,10 @@ export async function placeOrder(params: {
       }
     }
     
+    const orderId = `#${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const reason = signalReason || 'Manual order';
+    const score = signalScore ?? 0;
+    
     const position: PaperPosition = {
       id: nanoid(8),
       symbol,
@@ -315,18 +505,25 @@ export async function placeOrder(params: {
       stopLoss: stopLoss ?? null,
       takeProfit: takeProfit ?? null,
       openTime: new Date().toISOString(),
+      signalReason: reason,
+      signalScore: score,
+      orderId,
     };
     
     positions.push(position);
+    signalCount++;
+    
+    addLog('signal', `${symbol} ${direction === 'long' ? 'BUY' : 'SELL'} Signal Detected (${reason})`);
+    addLog('trade', `Executing ${direction === 'long' ? 'BUY' : 'SELL'} ${size} ${symbol} @ ${entryPrice}. Order ID: ${orderId}`);
     
     return { success: true, position, entryPrice };
   } catch (err: any) {
+    addLog('error', `Failed to place order: ${err.message}`);
     return { success: false, error: err.message || 'Failed to place order' };
   }
 }
 
 export async function closePosition(positionId: string): Promise<{ success: boolean; pnl?: number; error?: string }> {
-  // Update price first
   const pos = positions.find(p => p.id === positionId);
   if (!pos) {
     return { success: false, error: 'Position not found' };
@@ -347,35 +544,70 @@ export async function closePosition(positionId: string): Promise<{ success: bool
   return { success: true, pnl: record.pnl };
 }
 
+export function addScan(symbol: string) {
+  scanCount++;
+  addLog('info', `Scanning ${symbol}...`);
+}
+
+export function addRejection(symbol: string, reason: string) {
+  rejectedCount++;
+  addLog('info', `${symbol}: ${reason} - skipping`);
+}
+
 export function startEngine() {
-  if (isRunning) return;
+  if (isRunning && !isPaused) return;
   isRunning = true;
+  isPaused = false;
   
-  // Update prices every 15 seconds
+  if (!startedAt) {
+    startedAt = new Date();
+    resetDailyPnl();
+    dailyPnlBase = balance;
+  }
+  
+  addLog('system', 'Bot started with all modules active');
+  
   priceUpdateInterval = setInterval(updatePrices, 15000);
-  // Run immediately
   updatePrices();
 }
 
 export function pauseEngine() {
+  if (!isRunning) return;
+  isPaused = true;
   isRunning = false;
   if (priceUpdateInterval) {
     clearInterval(priceUpdateInterval);
     priceUpdateInterval = null;
   }
+  addLog('system', 'Bot paused');
 }
 
 export function stopEngine() {
   isRunning = false;
+  isPaused = false;
+  startedAt = null;
   if (priceUpdateInterval) {
     clearInterval(priceUpdateInterval);
     priceUpdateInterval = null;
   }
+  addLog('system', 'Bot stopped');
 }
 
 export function resetAccount() {
   stopEngine();
   balance = INITIAL_BALANCE;
+  peakBalance = INITIAL_BALANCE;
   positions = [];
   tradeHistory = [];
+  scanCount = 0;
+  signalCount = 0;
+  rejectedCount = 0;
+  dailyPnlBase = INITIAL_BALANCE;
+  dailyPnlDate = '';
+  logEntries = [];
+  addLog('system', `Paper account RESET to $${INITIAL_BALANCE.toLocaleString()}`);
+}
+
+export function getLog(): LogEntry[] {
+  return logEntries.slice(-100);
 }
