@@ -19,6 +19,13 @@ import {
 } from "./brokers/metaapi";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
+import {
+  getStatus as getPaperStatus,
+  placeOrder as placePaperOrder,
+  closePosition as closePaperPosition,
+  startEngine, pauseEngine, stopEngine, resetAccount,
+  setOwnerUserId,
+} from "./paperTrading";
 
 export const appRouter = router({
   system: systemRouter,
@@ -433,6 +440,55 @@ export const appRouter = router({
           );
           return { success: true, details: result };
         }
+      }),
+  }),
+
+  // ── Paper Trading Engine ──
+  paper: router({
+    status: publicProcedure.query(() => {
+      return getPaperStatus();
+    }),
+
+    start: protectedProcedure.mutation(({ ctx }) => {
+      setOwnerUserId(ctx.user.id);
+      startEngine();
+      return { success: true };
+    }),
+
+    pause: protectedProcedure.mutation(() => {
+      pauseEngine();
+      return { success: true };
+    }),
+
+    stop: protectedProcedure.mutation(() => {
+      stopEngine();
+      return { success: true };
+    }),
+
+    reset: protectedProcedure.mutation(() => {
+      resetAccount();
+      return { success: true };
+    }),
+
+    placeOrder: protectedProcedure
+      .input(
+        z.object({
+          symbol: z.string(),
+          direction: z.enum(["long", "short"]),
+          size: z.number().min(0.01).max(100),
+          stopLoss: z.number().optional(),
+          takeProfit: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        setOwnerUserId(ctx.user.id);
+        return placePaperOrder(input);
+      }),
+
+    closePosition: protectedProcedure
+      .input(z.object({ positionId: z.string() }))
+      .mutation(async ({ input }) => {
+        return closePaperPosition(input.positionId);
       }),
   }),
 });
