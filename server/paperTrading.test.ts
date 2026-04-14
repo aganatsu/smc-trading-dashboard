@@ -3,6 +3,9 @@ import {
   getStatus,
   placeOrder,
   closePosition,
+  placePendingOrder,
+  cancelPendingOrder,
+  updatePrices,
   startEngine,
   pauseEngine,
   stopEngine,
@@ -278,6 +281,136 @@ describe("Paper Trading Engine", () => {
       expect(status.positions).toHaveLength(0);
       expect(status.tradeHistory).toHaveLength(0);
       expect(status.isRunning).toBe(false);
+    });
+  });
+
+  describe("pending orders", () => {
+    it("places a pending buy limit order", () => {
+      const result = placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order).toBeDefined();
+      expect(result.order!.symbol).toBe("EUR/USD");
+      expect(result.order!.triggerPrice).toBe(1.08);
+      expect(result.order!.orderType).toBe("buy_limit");
+
+      const status = getStatus();
+      expect(status.pendingOrders).toHaveLength(1);
+    });
+
+    it("places a pending sell stop order with SL/TP", () => {
+      const result = placePendingOrder({
+        symbol: "GBP/USD",
+        direction: "short",
+        size: 0.05,
+        triggerPrice: 1.24,
+        orderType: "sell_stop",
+        stopLoss: 1.25,
+        takeProfit: 1.23,
+        signalReason: "BOS confirmed",
+        signalScore: 8,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order!.stopLoss).toBe(1.25);
+      expect(result.order!.takeProfit).toBe(1.23);
+      expect(result.order!.signalReason).toBe("BOS confirmed");
+      expect(result.order!.signalScore).toBe(8);
+    });
+
+    it("rejects pending order for unsupported symbol", () => {
+      const result = placePendingOrder({
+        symbol: "INVALID/PAIR",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.0,
+        orderType: "buy_limit",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Unsupported symbol");
+    });
+
+    it("cancels a pending order", () => {
+      const placeResult = placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+
+      const cancelResult = cancelPendingOrder(placeResult.order!.id);
+      expect(cancelResult.success).toBe(true);
+
+      const status = getStatus();
+      expect(status.pendingOrders).toHaveLength(0);
+    });
+
+    it("returns error when cancelling non-existent order", () => {
+      const result = cancelPendingOrder("nonexistent");
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Pending order not found");
+    });
+
+    it("clears pending orders on reset", () => {
+      placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+
+      resetAccount();
+      const status = getStatus();
+      expect(status.pendingOrders).toHaveLength(0);
+    });
+
+    it("triggers a buy_limit pending order when price drops to trigger level", async () => {
+      // Place a buy limit at 1.08 (current price from mock is 1.085)
+      // We need to make the mock return a price <= 1.08 to trigger it
+      const { fetchQuoteFromYahoo } = await import("./marketData");
+      const mockFetch = fetchQuoteFromYahoo as ReturnType<typeof vi.fn>;
+      
+      // First place a position so updatePrices processes the symbol
+      await placeOrder({ symbol: "EUR/USD", direction: "long", size: 0.01 });
+      
+      // Now place the pending order
+      const result = placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+      expect(result.success).toBe(true);
+      expect(getStatus().pendingOrders).toHaveLength(1);
+      
+      // Mock price drop to 1.079 (below trigger of 1.08)
+      mockFetch.mockResolvedValueOnce({
+        price: 1.079,
+        change: 0,
+        percentChange: 0,
+        open: 1.079,
+        high: 1.08,
+        low: 1.078,
+        previousClose: 1.085,
+      });
+      
+      await updatePrices();
+      
+      // Pending order should be triggered and converted to a position
+      const status = getStatus();
+      expect(status.pendingOrders).toHaveLength(0);
+      // Should have 2 positions now (original + triggered)
+      expect(status.positions.length).toBeGreaterThanOrEqual(2);
     });
   });
 

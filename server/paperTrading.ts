@@ -71,6 +71,20 @@ export interface StrategyStats {
   maxDrawdown: number;
 }
 
+export interface PendingOrder {
+  id: string;
+  symbol: string;
+  direction: 'long' | 'short';
+  size: number;
+  triggerPrice: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  signalReason: string;
+  signalScore: number;
+  createdAt: string;
+  orderType: 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop';
+}
+
 export interface PaperAccountState {
   // Account
   balance: number;
@@ -84,6 +98,7 @@ export interface PaperAccountState {
   
   // Positions & History
   positions: PaperPosition[];
+  pendingOrders: PendingOrder[];
   tradeHistory: PaperTradeRecord[];
   
   // Engine state
@@ -152,6 +167,7 @@ const INITIAL_BALANCE = 10000;
 let balance = INITIAL_BALANCE;
 let peakBalance = INITIAL_BALANCE;
 let positions: PaperPosition[] = [];
+let pendingOrders: PendingOrder[] = [];
 let tradeHistory: PaperTradeRecord[] = [];
 let isRunning = false;
 let isPaused = false;
@@ -237,8 +253,8 @@ function computeStrategyStats(): StrategyStats {
 
 // ─── Price Update Loop ──────────────────────────────────────────────
 
-async function updatePrices() {
-  if (positions.length === 0) return;
+export async function updatePrices() {
+  if (positions.length === 0 && pendingOrders.length === 0) return;
   
   const symbols = Array.from(new Set(positions.map(p => p.symbol)));
   
@@ -297,6 +313,39 @@ async function updatePrices() {
   
   for (const { id, reason } of toClose) {
     await closePositionInternal(id, reason);
+  }
+  
+  // Check pending orders for trigger
+  const toTrigger: string[] = [];
+  for (const order of pendingOrders) {
+    const positionsForSymbol = positions.filter(p => p.symbol === order.symbol);
+    const currentPrice = positionsForSymbol.length > 0 ? positionsForSymbol[0].currentPrice : null;
+    if (!currentPrice) {
+      try {
+        const quote = await fetchQuoteFromYahoo(order.symbol);
+        if (!quote?.price) continue;
+        const price = quote.price;
+        if ((order.orderType === 'buy_limit' && price <= order.triggerPrice) ||
+            (order.orderType === 'sell_limit' && price >= order.triggerPrice) ||
+            (order.orderType === 'buy_stop' && price >= order.triggerPrice) ||
+            (order.orderType === 'sell_stop' && price <= order.triggerPrice)) {
+          toTrigger.push(order.id);
+        }
+      } catch (err) {
+        console.error(`[PaperTrading] Failed to fetch quote for pending order ${order.symbol}:`, err);
+      }
+    } else {
+      if ((order.orderType === 'buy_limit' && currentPrice <= order.triggerPrice) ||
+          (order.orderType === 'sell_limit' && currentPrice >= order.triggerPrice) ||
+          (order.orderType === 'buy_stop' && currentPrice >= order.triggerPrice) ||
+          (order.orderType === 'sell_stop' && currentPrice <= order.triggerPrice)) {
+        toTrigger.push(order.id);
+      }
+    }
+  }
+  
+  for (const orderId of toTrigger) {
+    await triggerPendingOrder(orderId);
   }
 }
 
@@ -424,6 +473,7 @@ export function getStatus(): PaperAccountState {
     drawdown: parseFloat(Math.max(0, drawdown).toFixed(1)),
     
     positions: [...positions],
+    pendingOrders: [...pendingOrders],
     tradeHistory: tradeHistory.slice(-100),
     
     isRunning,
@@ -544,6 +594,76 @@ export async function closePosition(positionId: string): Promise<{ success: bool
   return { success: true, pnl: record.pnl };
 }
 
+// ─── Pending Orders ─────────────────────────────────────────────────
+
+export function placePendingOrder(params: {
+  symbol: string;
+  direction: 'long' | 'short';
+  size: number;
+  triggerPrice: number;
+  orderType: 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop';
+  stopLoss?: number;
+  takeProfit?: number;
+  signalReason?: string;
+  signalScore?: number;
+}): { success: boolean; order?: PendingOrder; error?: string } {
+  const { symbol, direction, size, triggerPrice, orderType, stopLoss, takeProfit, signalReason, signalScore } = params;
+  
+  if (!INSTRUMENT_SPECS[symbol]) {
+    return { success: false, error: `Unsupported symbol: ${symbol}` };
+  }
+  
+  const order: PendingOrder = {
+    id: nanoid(8),
+    symbol,
+    direction,
+    size,
+    triggerPrice,
+    stopLoss: stopLoss ?? null,
+    takeProfit: takeProfit ?? null,
+    signalReason: signalReason || 'Pending order',
+    signalScore: signalScore ?? 0,
+    createdAt: new Date().toISOString(),
+    orderType,
+  };
+  
+  pendingOrders.push(order);
+  addLog('trade', `Pending ${orderType.replace('_', ' ').toUpperCase()} placed: ${symbol} ${size} lots @ ${triggerPrice}`);
+  
+  return { success: true, order };
+}
+
+export function cancelPendingOrder(orderId: string): { success: boolean; error?: string } {
+  const idx = pendingOrders.findIndex(o => o.id === orderId);
+  if (idx === -1) return { success: false, error: 'Pending order not found' };
+  
+  const order = pendingOrders[idx];
+  pendingOrders.splice(idx, 1);
+  addLog('info', `Pending order cancelled: ${order.symbol} ${order.orderType.replace('_', ' ')}`);
+  
+  return { success: true };
+}
+
+async function triggerPendingOrder(orderId: string) {
+  const idx = pendingOrders.findIndex(o => o.id === orderId);
+  if (idx === -1) return;
+  
+  const order = pendingOrders[idx];
+  pendingOrders.splice(idx, 1);
+  
+  addLog('signal', `Pending order triggered: ${order.symbol} ${order.orderType.replace('_', ' ')} @ ${order.triggerPrice}`);
+  
+  await placeOrder({
+    symbol: order.symbol,
+    direction: order.direction,
+    size: order.size,
+    stopLoss: order.stopLoss ?? undefined,
+    takeProfit: order.takeProfit ?? undefined,
+    signalReason: order.signalReason,
+    signalScore: order.signalScore,
+  });
+}
+
 export function addScan(symbol: string) {
   scanCount++;
   addLog('info', `Scanning ${symbol}...`);
@@ -598,6 +718,7 @@ export function resetAccount() {
   balance = INITIAL_BALANCE;
   peakBalance = INITIAL_BALANCE;
   positions = [];
+  pendingOrders = [];
   tradeHistory = [];
   scanCount = 0;
   signalCount = 0;

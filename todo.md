@@ -119,4 +119,13 @@
 - [x] Track scan count, signal count, rejected count
 - [x] Track strategy name and performance stats (win rate, avg R:R, profit factor, expectancy, max drawdown)
 - [x] Track uptime since engine started
-- [ ] Support pending orders tab data (deferred — no pending order type in engine yet)
+- [x] Support pending orders tab data (pending orders engine + UI + cancel support added)
+
+## Phase 12: Pending Orders — Complete Implementation
+- [x] Add UI controls in BotView order form to create pending orders (order type selector, trigger price input)
+- [x] Handle pending-order quote fetch failures explicitly in paperTrading.ts (replace empty catch)
+- [x] Add vitest tests for pending order creation, trigger execution, cancellation (6 new tests, 81 total)
+
+## Phase 13: Pending Order Test Gaps
+- [x] Add vitest test for pending order trigger execution (price condition met → converts to position)
+- [x] Add route tests for paper.placePendingOrder and paper.cancelPendingOrder (5 new route tests + 1 trigger test, 87 total)

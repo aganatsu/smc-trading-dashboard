@@ -267,6 +267,87 @@ describe("paper trading tRPC routes", () => {
     });
   });
 
+  describe("paper.placePendingOrder", () => {
+    it("places a pending buy limit order via tRPC", async () => {
+      const result = await caller.paper.placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order).toBeDefined();
+      expect(result.order!.orderType).toBe("buy_limit");
+      expect(result.order!.triggerPrice).toBe(1.08);
+
+      const status = await caller.paper.status();
+      expect(status.pendingOrders).toHaveLength(1);
+    });
+
+    it("places a pending order with signal reason and score", async () => {
+      const result = await caller.paper.placePendingOrder({
+        symbol: "GBP/USD",
+        direction: "short",
+        size: 0.05,
+        triggerPrice: 1.24,
+        orderType: "sell_stop",
+        stopLoss: 1.25,
+        takeProfit: 1.23,
+        signalReason: "BOS + OB retest",
+        signalScore: 8,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order!.signalReason).toBe("BOS + OB retest");
+      expect(result.order!.signalScore).toBe(8);
+    });
+
+    it("rejects unauthenticated users", async () => {
+      const unauthCaller = appRouter.createCaller(createUnauthContext());
+      await expect(
+        unauthCaller.paper.placePendingOrder({
+          symbol: "EUR/USD",
+          direction: "long",
+          size: 0.1,
+          triggerPrice: 1.08,
+          orderType: "buy_limit",
+        })
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("paper.cancelPendingOrder", () => {
+    it("cancels a pending order via tRPC", async () => {
+      const placeResult = await caller.paper.placePendingOrder({
+        symbol: "EUR/USD",
+        direction: "long",
+        size: 0.1,
+        triggerPrice: 1.08,
+        orderType: "buy_limit",
+      });
+
+      const cancelResult = await caller.paper.cancelPendingOrder({
+        orderId: placeResult.order!.id,
+      });
+
+      expect(cancelResult.success).toBe(true);
+
+      const status = await caller.paper.status();
+      expect(status.pendingOrders).toHaveLength(0);
+    });
+
+    it("returns error for non-existent pending order", async () => {
+      const result = await caller.paper.cancelPendingOrder({
+        orderId: "nonexistent",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  });
+
   describe("full paper trading flow", () => {
     it("complete flow: start -> place order -> close -> verify journal logging", async () => {
       const { createTrade } = await import("./db");

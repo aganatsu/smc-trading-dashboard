@@ -52,6 +52,7 @@ export default function BotView() {
   const resetMut = trpc.paper.reset.useMutation({ onSuccess: () => status.refetch() });
   const placeMut = trpc.paper.placeOrder.useMutation({ onSuccess: () => status.refetch() });
   const closeMut = trpc.paper.closePosition.useMutation({ onSuccess: () => status.refetch() });
+  const cancelPendingMut = trpc.paper.cancelPendingOrder.useMutation({ onSuccess: () => status.refetch() });
 
   // Order form state
   const [symbol, setSymbol] = useState('EUR/USD');
@@ -62,9 +63,12 @@ export default function BotView() {
   const [signalReason, setSignalReason] = useState('');
   const [signalScore, setSignalScore] = useState('7');
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [orderType, setOrderType] = useState<'market' | 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop'>('market');
+  const [triggerPrice, setTriggerPrice] = useState('');
+  const placePendingMut = trpc.paper.placePendingOrder.useMutation({ onSuccess: () => status.refetch() });
 
   // Position tabs
-  const [posTab, setPosTab] = useState<'open' | 'closedToday' | 'history'>('open');
+  const [posTab, setPosTab] = useState<'open' | 'pending' | 'closedToday' | 'history'>('open');
 
   // Listen for symbol sync from sidebar
   useEffect(() => {
@@ -104,15 +108,29 @@ export default function BotView() {
   }
 
   const handlePlace = () => {
-    placeMut.mutate({
-      symbol,
-      direction,
-      size: parseFloat(size) || 0.01,
-      stopLoss: sl ? parseFloat(sl) : undefined,
-      takeProfit: tp ? parseFloat(tp) : undefined,
-      signalReason: signalReason || undefined,
-      signalScore: signalScore ? parseFloat(signalScore) : undefined,
-    });
+    if (orderType === 'market') {
+      placeMut.mutate({
+        symbol,
+        direction,
+        size: parseFloat(size) || 0.01,
+        stopLoss: sl ? parseFloat(sl) : undefined,
+        takeProfit: tp ? parseFloat(tp) : undefined,
+        signalReason: signalReason || undefined,
+        signalScore: signalScore ? parseFloat(signalScore) : undefined,
+      });
+    } else {
+      placePendingMut.mutate({
+        symbol,
+        direction,
+        size: parseFloat(size) || 0.01,
+        triggerPrice: parseFloat(triggerPrice) || 0,
+        orderType,
+        stopLoss: sl ? parseFloat(sl) : undefined,
+        takeProfit: tp ? parseFloat(tp) : undefined,
+        signalReason: signalReason || undefined,
+        signalScore: signalScore ? parseFloat(signalScore) : undefined,
+      });
+    }
     setShowOrderForm(false);
   };
 
@@ -196,6 +214,16 @@ export default function BotView() {
         <div className="px-4 py-3 border-b border-border bg-card/30 flex-shrink-0">
           <div className="flex items-end gap-3 flex-wrap">
             <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Order Type</label>
+              <select value={orderType} onChange={e => setOrderType(e.target.value as typeof orderType)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-28">
+                <option value="market">Market</option>
+                <option value="buy_limit">Buy Limit</option>
+                <option value="sell_limit">Sell Limit</option>
+                <option value="buy_stop">Buy Stop</option>
+                <option value="sell_stop">Sell Stop</option>
+              </select>
+            </div>
+            <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Symbol</label>
               <select value={symbol} onChange={e => setSymbol(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-28">
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -212,6 +240,12 @@ export default function BotView() {
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Size (lots)</label>
               <input value={size} onChange={e => setSize(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-20" />
             </div>
+            {orderType !== 'market' && (
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Trigger Price</label>
+                <input value={triggerPrice} onChange={e => setTriggerPrice(e.target.value)} placeholder="Price" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-24" />
+              </div>
+            )}
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">SL</label>
               <input value={sl} onChange={e => setSl(e.target.value)} placeholder="—" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-24" />
@@ -228,11 +262,12 @@ export default function BotView() {
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Score</label>
               <input value={signalScore} onChange={e => setSignalScore(e.target.value)} placeholder="0-10" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-14" />
             </div>
-            <button onClick={handlePlace} disabled={placeMut.isPending} className={`px-5 py-1.5 font-bold text-xs uppercase tracking-wider rounded transition ${direction === 'long' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-red-500 hover:bg-red-400 text-white'}`}>
-              {placeMut.isPending ? '...' : `${direction === 'long' ? 'BUY' : 'SELL'} ${symbol}`}
+            <button onClick={handlePlace} disabled={placeMut.isPending || placePendingMut.isPending} className={`px-5 py-1.5 font-bold text-xs uppercase tracking-wider rounded transition ${direction === 'long' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-red-500 hover:bg-red-400 text-white'}`}>
+              {(placeMut.isPending || placePendingMut.isPending) ? '...' : orderType === 'market' ? `${direction === 'long' ? 'BUY' : 'SELL'} ${symbol}` : `${orderType.replace('_', ' ').toUpperCase()} ${symbol}`}
             </button>
           </div>
           {placeMut.error && <p className="text-red-400 text-xs mt-1 font-mono">{placeMut.error.message}</p>}
+          {placePendingMut.error && <p className="text-red-400 text-xs mt-1 font-mono">{placePendingMut.error.message}</p>}
         </div>
       )}
 
@@ -245,6 +280,7 @@ export default function BotView() {
             <div className="flex gap-1 border-b border-border">
               {[
                 { key: 'open' as const, label: `Open Positions (${d.positions.length})` },
+                { key: 'pending' as const, label: `Pending (${d.pendingOrders?.length ?? 0})` },
                 { key: 'closedToday' as const, label: `Closed Today (${closedToday.length})` },
                 { key: 'history' as const, label: 'All History' },
               ].map(tab => (
@@ -314,6 +350,56 @@ export default function BotView() {
                             disabled={closeMut.isPending}
                             className="w-6 h-6 flex items-center justify-center rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition text-xs"
                             title="Close position"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            )}
+
+            {posTab === 'pending' && (
+              !d.pendingOrders?.length ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">No pending orders.</div>
+              ) : (
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="text-left py-2 pr-2">Symbol</th>
+                      <th className="text-left py-2 pr-2">Type</th>
+                      <th className="text-right py-2 pr-2">Trigger</th>
+                      <th className="text-right py-2 pr-2">Size</th>
+                      <th className="text-right py-2 pr-2">SL</th>
+                      <th className="text-right py-2 pr-2">TP</th>
+                      <th className="text-left py-2 pr-2">Signal</th>
+                      <th className="text-left py-2 pr-2">Created</th>
+                      <th className="text-center py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.pendingOrders.map(order => (
+                      <tr key={order.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
+                        <td className="py-2 pr-2 font-bold text-foreground">{order.symbol.replace('/', '')}</td>
+                        <td className="py-2 pr-2">
+                          <span className={order.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
+                            {order.orderType.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-2 text-right text-foreground">{order.triggerPrice.toFixed(order.symbol.includes('JPY') ? 3 : 5)}</td>
+                        <td className="py-2 pr-2 text-right text-foreground">{order.size.toFixed(2)}</td>
+                        <td className="py-2 pr-2 text-right text-muted-foreground">{order.stopLoss?.toFixed(order.symbol.includes('JPY') ? 3 : 5) ?? '—'}</td>
+                        <td className="py-2 pr-2 text-right text-muted-foreground">{order.takeProfit?.toFixed(order.symbol.includes('JPY') ? 3 : 5) ?? '—'}</td>
+                        <td className="py-2 pr-2 text-yellow-400/80 truncate max-w-[140px]" title={order.signalReason}>{order.signalReason}</td>
+                        <td className="py-2 pr-2 text-muted-foreground">{new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</td>
+                        <td className="py-2 text-center">
+                          <button
+                            onClick={() => cancelPendingMut.mutate({ orderId: order.id })}
+                            disabled={cancelPendingMut.isPending}
+                            className="w-6 h-6 flex items-center justify-center rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition text-xs"
+                            title="Cancel pending order"
                           >
                             ✕
                           </button>

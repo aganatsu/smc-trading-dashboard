@@ -23,6 +23,8 @@ import {
   getStatus as getPaperStatus,
   placeOrder as placePaperOrder,
   closePosition as closePaperPosition,
+  placePendingOrder as placePaperPendingOrder,
+  cancelPendingOrder as cancelPaperPendingOrder,
   startEngine, pauseEngine, stopEngine, resetAccount,
   setOwnerUserId, getLog as getPaperLog,
 } from "./paperTrading";
@@ -491,6 +493,30 @@ export const appRouter = router({
       .input(z.object({ positionId: z.string() }))
       .mutation(async ({ input }) => {
         return closePaperPosition(input.positionId);
+      }),
+
+    placePendingOrder: protectedProcedure
+      .input(
+        z.object({
+          symbol: z.string(),
+          direction: z.enum(["long", "short"]),
+          size: z.number().min(0.01).max(100),
+          triggerPrice: z.number(),
+          orderType: z.enum(["buy_limit", "sell_limit", "buy_stop", "sell_stop"]),
+          stopLoss: z.number().optional(),
+          takeProfit: z.number().optional(),
+          signalReason: z.string().optional(),
+          signalScore: z.number().min(0).max(10).optional(),
+        })
+      )
+      .mutation(({ input }) => {
+        return placePaperPendingOrder(input);
+      }),
+
+    cancelPendingOrder: protectedProcedure
+      .input(z.object({ orderId: z.string() }))
+      .mutation(({ input }) => {
+        return cancelPaperPendingOrder(input.orderId);
       }),
 
     log: publicProcedure.query(() => {
