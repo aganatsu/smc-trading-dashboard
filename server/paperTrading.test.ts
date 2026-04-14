@@ -12,6 +12,7 @@ import {
   resetAccount,
   setOwnerUserId,
 } from "./paperTrading";
+import { resetConfig, updateConfig } from "./botConfig";
 
 // Mock the dependencies
 vi.mock("./marketData", () => ({
@@ -45,6 +46,12 @@ describe("Paper Trading Engine", () => {
   beforeEach(() => {
     resetAccount();
     setOwnerUserId(1);
+    // Reset bot config and relax validation so unit tests pass without signal scores or strict R:R
+    resetConfig();
+    updateConfig({
+      strategy: { minConfluenceScore: 0 } as any,
+      risk: { minRiskReward: 0 } as any,
+    });
   });
 
   afterEach(() => {

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
+import BotConfigPanel from '@/components/BotConfigPanel';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ export default function BotView() {
   const [signalReason, setSignalReason] = useState('');
   const [signalScore, setSignalScore] = useState('7');
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const [orderType, setOrderType] = useState<'market' | 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop'>('market');
   const [triggerPrice, setTriggerPrice] = useState('');
   const placePendingMut = trpc.paper.placePendingOrder.useMutation({ onSuccess: () => status.refetch() });
@@ -170,6 +172,9 @@ export default function BotView() {
           )}
           <button onClick={() => setShowOrderForm(!showOrderForm)} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider rounded transition">
             + Order
+          </button>
+          <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+            ⚙ Config
           </button>
         </div>
 
@@ -628,6 +633,9 @@ export default function BotView() {
           )}
         </div>
       </div>
+
+      {/* Bot Config Modal */}
+      {showConfig && <BotConfigPanel onClose={() => setShowConfig(false)} />}
     </div>
   );
 }

@@ -18,6 +18,7 @@
 import { nanoid } from 'nanoid';
 import { fetchQuoteFromYahoo } from './marketData';
 import { createTrade } from './db';
+import { validateTradeAgainstConfig, getConfig } from './botConfig';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -514,6 +515,33 @@ export async function placeOrder(params: {
   if (size <= 0 || size > 100) {
     return { success: false, error: 'Invalid position size' };
   }
+
+  // ─── Bot Config Validation ──────────────────────────────────────
+  const positionsForSymbol = positions.filter(p => p.symbol === symbol).length;
+  const totalMargin = positions.reduce((sum, p) => sum + (p.size * p.entryPrice * 100), 0);
+  const portfolioHeatPercent = balance > 0 ? (totalMargin / balance) * 100 : 0;
+  const currentDailyPnl = balance - dailyPnlBase;
+  const dailyLossPercent = balance > 0 ? Math.max(0, -currentDailyPnl) / balance * 100 : 0;
+  const drawdownPercent = peakBalance > 0 ? ((peakBalance - balance) / peakBalance) * 100 : 0;
+  const configCheck = validateTradeAgainstConfig({
+    symbol,
+    direction,
+    size,
+    stopLoss,
+    takeProfit,
+    entryPrice: 0, // will be checked after quote fetch
+    currentPositions: positions.length,
+    positionsForSymbol,
+    portfolioHeatPercent,
+    dailyLossPercent,
+    drawdownPercent,
+    confluenceScore: signalScore ?? 0,
+  });
+  if (!configCheck.allowed) {
+    addLog('warning', `Trade rejected: ${configCheck.reason}`);
+    rejectedCount++;
+    return { success: false, error: configCheck.reason };
+  }
   
   try {
     const quote = await fetchQuoteFromYahoo(symbol);
@@ -612,7 +640,34 @@ export function placePendingOrder(params: {
   if (!INSTRUMENT_SPECS[symbol]) {
     return { success: false, error: `Unsupported symbol: ${symbol}` };
   }
-  
+
+  // ─── Bot Config Validation (same as placeOrder) ─────────────────
+  const positionsForSymbol = positions.filter(p => p.symbol === symbol).length;
+  const totalMargin = positions.reduce((sum, p) => sum + (p.size * p.entryPrice * 100), 0);
+  const portfolioHeatPercent = balance > 0 ? (totalMargin / balance) * 100 : 0;
+  const currentDailyPnlPending = balance - dailyPnlBase;
+  const dailyLossPercent = balance > 0 ? Math.max(0, -currentDailyPnlPending) / balance * 100 : 0;
+  const drawdownPercent = peakBalance > 0 ? ((peakBalance - balance) / peakBalance) * 100 : 0;
+  const configCheck = validateTradeAgainstConfig({
+    symbol,
+    direction,
+    size,
+    stopLoss,
+    takeProfit,
+    entryPrice: triggerPrice,
+    currentPositions: positions.length,
+    positionsForSymbol,
+    portfolioHeatPercent,
+    dailyLossPercent,
+    drawdownPercent,
+    confluenceScore: signalScore ?? 0,
+  });
+  if (!configCheck.allowed) {
+    addLog('warning', `Pending order rejected: ${configCheck.reason}`);
+    rejectedCount++;
+    return { success: false, error: configCheck.reason };
+  }
+
   const order: PendingOrder = {
     id: nanoid(8),
     symbol,

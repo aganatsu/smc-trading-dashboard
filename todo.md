@@ -129,3 +129,27 @@
 ## Phase 13: Pending Order Test Gaps
 - [x] Add vitest test for pending order trigger execution (price condition met → converts to position)
 - [x] Add route tests for paper.placePendingOrder and paper.cancelPendingOrder (5 new route tests + 1 trigger test, 87 total)
+
+## Phase 14: Bot Configuration Panel (from research)
+- [x] Strategy Settings: setup toggles (BOS, CHoCH, OB, FVG, Liquidity Sweep), min confluence score, HTF bias required, OB lookback, FVG min size
+- [x] Risk Management: risk per trade %, max daily loss %, max drawdown %, position sizing method, max open positions, max per symbol, max portfolio heat %, min R:R
+- [x] Entry Rules: order type (market/limit/stop), pyramiding, close on reverse, cooldown period, trailing entry
+- [x] Exit Rules: TP method, SL method, trailing stop, partial TP, break-even stop, time-based exit, end-of-session close
+- [x] Instrument Filter: allowed instruments with per-pair toggles, spread filter, volatility filter
+- [x] Session/Time Filter: trading sessions (London/NY/Asian/Sydney), active hours, days of week, news filter
+- [x] Notifications: notify on trade, signal, error, daily summary
+- [x] SMC-Specific: OB body/wick ratio, OB invalidation, FVG fill %, premium/discount zone, structure break confirmation, liquidity sweep required, multi-TF alignment
+- [x] Account Protection: daily profit target, daily loss limit, cumulative profit/loss limits with halt actions
+- [x] Config persistence (server state + tRPC routes)
+- [x] Config applied to paper trading engine behavior (validateTradeAgainstConfig wired into placeOrder)
+- [x] Config UI panel with 8 tabbed sections (BotConfigPanel component)
+- [x] Config button in Bot View top bar
+- [x] Vitest tests for botConfig module (16 tests)
+- [x] All 103 tests passing across 7 test files
+
+## Phase 15: Bot Config Gaps (from audit)
+- [x] Add tRPC route tests for botConfig.get, botConfig.update, botConfig.reset (9 tests)
+- [x] Wire config into pending order placement (validateTradeAgainstConfig wired into placePendingOrder)
+- [x] Verify BotConfigPanel.tsx has all 8 tabbed sections and save/reset/unsaved-changes feedback
+- [x] Add config-driven engine behavior tests (disabled instrument blocks trade, disabled instrument blocks pending order, relaxed config allows trade)
+- [x] All 112 tests passing across 8 test files

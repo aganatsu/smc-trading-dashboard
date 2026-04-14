@@ -28,9 +28,35 @@ import {
   startEngine, pauseEngine, stopEngine, resetAccount,
   setOwnerUserId, getLog as getPaperLog,
 } from "./paperTrading";
+import { getConfig, updateConfig, resetConfig, type BotConfig } from "./botConfig";
 
 export const appRouter = router({
   system: systemRouter,
+
+  // ─── Bot Configuration ──────────────────────────────────────────────
+  botConfig: router({
+    get: publicProcedure.query(() => {
+      return getConfig();
+    }),
+    update: publicProcedure
+      .input(z.object({
+        strategy: z.any().optional(),
+        risk: z.any().optional(),
+        entry: z.any().optional(),
+        exit: z.any().optional(),
+        instruments: z.any().optional(),
+        sessions: z.any().optional(),
+        notifications: z.any().optional(),
+        protection: z.any().optional(),
+        account: z.any().optional(),
+      }))
+      .mutation(({ input }) => {
+        return updateConfig(input as Partial<BotConfig>);
+      }),
+    reset: publicProcedure.mutation(() => {
+      return resetConfig();
+    }),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

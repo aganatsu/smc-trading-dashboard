@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { resetConfig, updateConfig } from "./botConfig";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -100,6 +101,12 @@ describe("paper trading tRPC routes", () => {
     stopEngine();
     resetAccount();
     setOwnerUserId(1);
+    // Reset bot config and relax validation so unit tests pass without signal scores or strict R:R
+    resetConfig();
+    updateConfig({
+      strategy: { minConfluenceScore: 0 } as any,
+      risk: { minRiskReward: 0 } as any,
+    });
     caller = appRouter.createCaller(createAuthContext());
   });
 
