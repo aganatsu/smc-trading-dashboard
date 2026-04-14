@@ -24,7 +24,7 @@ export default function JournalView() {
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
 
   const trades = trpc.trades.list.useQuery(
-    { limit: 200, offset: 0 },
+    { limit: 100, offset: 0 },
     { refetchInterval: 15000 }
   );
 

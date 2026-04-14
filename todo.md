@@ -88,3 +88,6 @@
 - [x] Run full test suite — 75 tests pass across 6 files
 - [x] Visual verification in browser — all 5 views render correctly
 - [x] TypeScript: 0 errors
+
+## Bug Fixes
+- [x] Fix tRPC query error: limit parameter exceeds maximum of 100 on Dashboard page (JournalView was sending limit:200)
