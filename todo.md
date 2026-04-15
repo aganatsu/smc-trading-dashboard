@@ -267,3 +267,70 @@
 - [x] Add last updated timestamp
 - [x] Fallback to static schedule when live feed unavailable
 - [x] Add CN flag for CNY events
+
+## Production-Grade Gaps — Full Resolution
+
+### 1. Persist paper trading state to DB
+- [x] Add `paper_accounts` table (userId, balance, peakBalance, counters, engine state, executionMode, killSwitch)
+- [x] Add `paper_positions` table (open positions + pending orders in single table with status enum)
+- [x] Add `paper_trade_history` table (closed trades with full P&L data)
+- [x] Run pnpm db:push to migrate new tables
+- [x] Create paperTradingPersistence.ts with debounced save/restore/clear functions
+- [x] On trade place/close: persist position changes to DB
+- [x] On pending order create/cancel/trigger: persist to DB
+- [x] On balance/equity change: persist account state to DB (debounced 1s)
+- [x] On server restart: auto-restore last known state from DB
+- [x] Add kill switch (emergency halt) with auto-halt on daily loss / cumulative loss limits
+- [x] Add execution mode (paper/live) flag persisted to DB
+- [x] Add emergency close all positions function
+- [x] Add tRPC routes: paper.killSwitch, paper.executionMode, paper.emergencyCloseAll
+- [x] Write vitest tests for state persistence (9 tests in persistence.test.ts)
+
+### 2. Slippage/spread modeling in backtest engine
+- [x] Add spread simulation (configurable per instrument, default realistic spreads per pair)
+- [x] Add slippage simulation (random within configurable range, 0-10 pips)
+- [x] Apply spread to entry price (buy at ask = mid + half spread, sell at bid = mid - half spread)
+- [x] Apply slippage to SL/TP fills (adverse slippage on SL, minimal on TP, half on time exits)
+- [x] Add spread/slippage config to backtest UI parameters (Spread & Slippage section)
+- [x] Show spread/slippage impact in backtest results summary (total cost, avg per trade)
+- [x] Track rawEntryPrice/rawExitPrice and spreadCost/slippageCost per trade
+- [x] Add route params: spreadPips, slippagePips, useRealisticSpread
+- [x] Write vitest tests for spread/slippage calculations (21 tests in spreadSlippage.test.ts)
+
+### 3. Live broker execution with safety guards
+- [x] Create liveExecution.ts bridge module (OANDA + MetaApi)
+- [x] Add execution mode toggle: PAPER / LIVE (with confirmation dialog)
+- [x] Add kill switch: emergency stop all trading + close all positions
+- [x] Add max daily loss halt: auto-stop trading when daily loss exceeds threshold
+- [x] Add max drawdown halt: auto-stop when drawdown exceeds threshold
+- [x] Add position size validation against broker account balance
+- [x] Add max live lot size limits per instrument
+- [x] Wire placeOrder to route through broker when mode is LIVE
+- [x] Live execution log entries with [LIVE] prefix and broker trade IDs
+- [x] Automatic fallback to paper-only on broker errors
+- [x] Show LIVE mode warning banner in UI (fixed top red bar)
+- [x] Kill switch banner with deactivate + close all buttons (fixed bottom)
+- [x] Live mode confirmation dialog with safety warnings
+- [x] Execution mode badge (clickable toggle in top bar)
+- [x] Add tRPC routes: liveBrokerStatus, setActiveBroker, getActiveBroker
+- [x] Owner notification on every live trade execution and failure
+- [x] Write vitest tests for safety guard logic (19 tests in liveExecution.test.ts)
+
+### 4. WebSocket real-time price updates
+- [x] Add WebSocket server endpoint on /ws/prices (ws package)
+- [x] Stream live price quotes via WebSocket to connected clients
+- [x] Server-side price feed: poll Yahoo Finance at 5s interval, broadcast to WS clients
+- [x] Client: useWebSocketPrices hook (per-component) and useGlobalPriceFeed hook (singleton)
+- [x] Client: subscribe/unsubscribe protocol with symbol filtering
+- [x] Add WS connection status indicator in AppShell status bar (WS Live / Reconnecting / Offline)
+- [x] Auto-reconnect with exponential backoff on disconnect (1s base, 30s max)
+- [x] Heartbeat ping/pong every 25s, stale client cleanup after 5min
+- [x] Cached prices sent immediately on new subscription
+- [x] Add tRPC route: ws.status (connected clients, latest prices)
+- [x] Write vitest tests for WebSocket message format (16 tests in wsPriceFeed.test.ts)
+
+### 5. Standalone ZIP package for local installation
+- [x] Create install.sh script (installs Node.js deps, sets up .env, runs DB migration)
+- [x] Create README-INSTALL.md with step-by-step local setup instructions
+- [x] Package entire project as downloadable ZIP (493KB)
+- [x] Ensure app runs standalone without Manus OAuth (fallback to owner auth)

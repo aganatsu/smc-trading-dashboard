@@ -26,6 +26,10 @@ export interface BacktestConfig {
   initialBalance: number;
   useCurrentConfig: boolean; // Use current BotConfig or custom overrides
   configOverrides?: Partial<BotConfig>;
+  // Spread & slippage simulation
+  spreadPips?: number;       // Fixed spread in pips (0 = no spread). Overrides default if set.
+  slippagePips?: number;     // Max random slippage in pips (0 = no slippage)
+  useRealisticSpread?: boolean; // Use per-instrument default spreads
 }
 
 export interface BacktestTrade {
@@ -35,13 +39,17 @@ export interface BacktestTrade {
   entryTime: string;
   exitTime: string;
   direction: "long" | "short";
-  entryPrice: number;
-  exitPrice: number;
+  entryPrice: number;       // After spread applied
+  rawEntryPrice: number;    // Mid price before spread
+  exitPrice: number;        // After slippage applied
+  rawExitPrice: number;     // Before slippage
   stopLoss: number;
   takeProfit: number;
   size: number;
   pnl: number;
   pnlPercent: number;
+  spreadCost: number;       // $ cost of spread on this trade
+  slippageCost: number;     // $ cost of slippage on this trade
   exitReason: "tp" | "sl" | "time" | "reverse_signal" | "end_of_data";
   confluenceScore: number;
   bias: string;
@@ -62,6 +70,17 @@ export interface BacktestResult {
     slMethod: string;
     tpMethod: string;
   };
+
+  // Spread/slippage impact
+  spreadSlippageConfig: {
+    spreadPips: number;
+    slippagePips: number;
+    useRealisticSpread: boolean;
+  };
+  totalSpreadCost: number;      // Total $ lost to spread
+  totalSlippageCost: number;    // Total $ lost to slippage
+  avgSpreadCostPerTrade: number;
+  avgSlippageCostPerTrade: number;
 
   // Performance
   totalTrades: number;
@@ -122,18 +141,77 @@ export interface BacktestResult {
 
 // ─── Instrument Specs (same as botEngine) ───────────────────────────
 
-const INSTRUMENT_SPECS: Record<string, { pipSize: number; lotValue: number }> = {
-  "EUR/USD": { pipSize: 0.0001, lotValue: 100000 },
-  "GBP/USD": { pipSize: 0.0001, lotValue: 100000 },
-  "USD/JPY": { pipSize: 0.01, lotValue: 100000 },
-  "GBP/JPY": { pipSize: 0.01, lotValue: 100000 },
-  "AUD/USD": { pipSize: 0.0001, lotValue: 100000 },
-  "USD/CAD": { pipSize: 0.0001, lotValue: 100000 },
-  "EUR/GBP": { pipSize: 0.0001, lotValue: 100000 },
-  "NZD/USD": { pipSize: 0.0001, lotValue: 100000 },
-  "XAU/USD": { pipSize: 0.01, lotValue: 100 },
-  "BTC/USD": { pipSize: 0.01, lotValue: 1 },
+const INSTRUMENT_SPECS: Record<string, { pipSize: number; lotValue: number; defaultSpreadPips: number }> = {
+  "EUR/USD": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.0 },
+  "GBP/USD": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.5 },
+  "USD/JPY": { pipSize: 0.01, lotValue: 100000, defaultSpreadPips: 1.2 },
+  "GBP/JPY": { pipSize: 0.01, lotValue: 100000, defaultSpreadPips: 2.5 },
+  "AUD/USD": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.3 },
+  "USD/CAD": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.5 },
+  "EUR/GBP": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.5 },
+  "NZD/USD": { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.8 },
+  "XAU/USD": { pipSize: 0.01, lotValue: 100, defaultSpreadPips: 3.0 },
+  "BTC/USD": { pipSize: 0.01, lotValue: 1, defaultSpreadPips: 50.0 },
 };
+
+// ─── Spread & Slippage Helpers ──────────────────────────────────────
+
+function getEffectiveSpread(btConfig: BacktestConfig, symbol: string): number {
+  const spec = INSTRUMENT_SPECS[symbol] || { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.5 };
+  if (btConfig.spreadPips !== undefined && btConfig.spreadPips > 0) {
+    return btConfig.spreadPips;
+  }
+  if (btConfig.useRealisticSpread !== false) {
+    return spec.defaultSpreadPips;
+  }
+  return 0;
+}
+
+function getRandomSlippage(maxSlippagePips: number): number {
+  if (maxSlippagePips <= 0) return 0;
+  // Random slippage between 0 and maxSlippagePips (always adverse)
+  return Math.random() * maxSlippagePips;
+}
+
+/**
+ * Apply spread to entry price:
+ * - Buy (long): entry at ask = mid + half spread
+ * - Sell (short): entry at bid = mid - half spread
+ */
+function applySpreadToEntry(midPrice: number, direction: 'long' | 'short', spreadPips: number, pipSize: number): number {
+  const halfSpread = (spreadPips / 2) * pipSize;
+  return direction === 'long' ? midPrice + halfSpread : midPrice - halfSpread;
+}
+
+/**
+ * Apply slippage to exit price (always adverse):
+ * - Long SL hit: exit lower than SL by slippage
+ * - Short SL hit: exit higher than SL by slippage
+ * - TP fills are generally favorable, so minimal slippage on TP
+ */
+function applySlippageToExit(
+  exitPrice: number,
+  direction: 'long' | 'short',
+  exitReason: 'sl' | 'tp' | 'time' | 'end_of_data',
+  slippagePips: number,
+  pipSize: number,
+): number {
+  if (slippagePips <= 0) return exitPrice;
+  const slip = getRandomSlippage(slippagePips) * pipSize;
+  
+  if (exitReason === 'sl') {
+    // Adverse slippage on stop loss
+    return direction === 'long' ? exitPrice - slip : exitPrice + slip;
+  }
+  if (exitReason === 'tp') {
+    // Minimal favorable slippage on TP (10% of max)
+    const tpSlip = getRandomSlippage(slippagePips * 0.1) * pipSize;
+    return direction === 'long' ? exitPrice + tpSlip : exitPrice - tpSlip;
+  }
+  // Time/end-of-data: apply half slippage
+  const halfSlip = getRandomSlippage(slippagePips * 0.5) * pipSize;
+  return direction === 'long' ? exitPrice - halfSlip : exitPrice + halfSlip;
+}
 
 // ─── Timeframe Mapping ──────────────────────────────────────────────
 const TF_MAP: Record<string, string> = {
@@ -261,8 +339,14 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
   currentBacktest.progress = 0;
   currentBacktest.result = null;
 
-  const config = btConfig.useCurrentConfig ? getConfig() : { ...getConfig(), ...btConfig.configOverrides };
-  const spec = INSTRUMENT_SPECS[btConfig.symbol] || { pipSize: 0.0001, lotValue: 100000 };
+    const config = btConfig.useCurrentConfig ? getConfig() : { ...getConfig(), ...btConfig.configOverrides };
+    const spec = INSTRUMENT_SPECS[btConfig.symbol] || { pipSize: 0.0001, lotValue: 100000, defaultSpreadPips: 1.5 };
+
+    // Spread/slippage config
+    const effectiveSpreadPips = getEffectiveSpread(btConfig, btConfig.symbol);
+    const effectiveSlippagePips = btConfig.slippagePips ?? 0;
+    let totalSpreadCost = 0;
+    let totalSlippageCost = 0;
 
   const emptyResult = (error: string): BacktestResult => ({
     symbol: btConfig.symbol,
@@ -277,6 +361,13 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
       slMethod: config.exit.stopLossMethod,
       tpMethod: config.exit.takeProfitMethod,
     },
+    spreadSlippageConfig: {
+      spreadPips: 0,
+      slippagePips: 0,
+      useRealisticSpread: false,
+    },
+    totalSpreadCost: 0, totalSlippageCost: 0,
+    avgSpreadCostPerTrade: 0, avgSlippageCostPerTrade: 0,
     totalTrades: 0, winningTrades: 0, losingTrades: 0, breakEvenTrades: 0,
     winRate: 0, profitFactor: 0, netProfit: 0, netProfitPercent: 0,
     grossProfit: 0, grossLoss: 0, maxDrawdown: 0, maxDrawdownPercent: 0,
@@ -329,12 +420,14 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
       entryTime: string;
       direction: "long" | "short";
       entryPrice: number;
+      rawEntryPrice: number;
       stopLoss: number;
       takeProfit: number;
       size: number;
       confluenceScore: number;
       bias: string;
       setupFactors: string[];
+      spreadCost: number;
     } | null = null;
 
     let consecutiveWins = 0;
@@ -393,9 +486,24 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
         }
 
         if (exitPrice && exitReason) {
+          // Apply slippage to exit
+          const rawExitPrice = exitPrice;
+          exitPrice = applySlippageToExit(exitPrice, openTrade.direction, exitReason, effectiveSlippagePips, spec.pipSize);
+
           const pnl = openTrade.direction === "long"
             ? (exitPrice - openTrade.entryPrice) * openTrade.size * spec.lotValue
             : (openTrade.entryPrice - exitPrice) * openTrade.size * spec.lotValue;
+
+          // Calculate slippage cost (difference between raw and slipped exit)
+          const slippageCost = Math.abs(
+            (openTrade.direction === "long"
+              ? (rawExitPrice - openTrade.entryPrice) - (exitPrice - openTrade.entryPrice)
+              : (openTrade.entryPrice - rawExitPrice) - (openTrade.entryPrice - exitPrice)
+            ) * openTrade.size * spec.lotValue
+          );
+
+          totalSpreadCost += openTrade.spreadCost;
+          totalSlippageCost += slippageCost;
 
           const pnlPercent = (pnl / balance) * 100;
           balance += pnl;
@@ -408,12 +516,16 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
             exitTime: currentCandle.datetime,
             direction: openTrade.direction,
             entryPrice: openTrade.entryPrice,
+            rawEntryPrice: openTrade.rawEntryPrice,
             exitPrice,
+            rawExitPrice,
             stopLoss: openTrade.stopLoss,
             takeProfit: openTrade.takeProfit,
             size: openTrade.size,
             pnl,
             pnlPercent,
+            spreadCost: openTrade.spreadCost,
+            slippageCost,
             exitReason,
             confluenceScore: openTrade.confluenceScore,
             bias: openTrade.bias,
@@ -498,10 +610,14 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
         if (config.strategy.onlySellInPremium && signal === "sell" && analysis.premiumDiscount.currentZone === "discount") continue;
       }
 
-      // Calculate entry, SL, TP
+      // Calculate entry, SL, TP with spread
       const direction: "long" | "short" = signal === "buy" ? "long" : "short";
-      const entryPrice = currentCandle.close;
+      const rawEntryPrice = currentCandle.close;
+      const entryPrice = applySpreadToEntry(rawEntryPrice, direction, effectiveSpreadPips, spec.pipSize);
       const { sl, tp } = calculateSLTP(config, entryPrice, direction, analysis, btConfig.symbol);
+      
+      // Calculate spread cost for this trade
+      const spreadCostPerTrade = effectiveSpreadPips * spec.pipSize * spec.lotValue;
 
       // Check minimum R:R
       const slDistance = Math.abs(entryPrice - sl);
@@ -532,22 +648,28 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
         entryTime: currentCandle.datetime,
         direction,
         entryPrice,
+        rawEntryPrice,
         stopLoss: sl,
         takeProfit: tp,
         size: Math.max(0.01, size),
         confluenceScore: analysis.confluenceScore,
         bias: analysis.bias,
         setupFactors: factors,
+        spreadCost: spreadCostPerTrade * Math.max(0.01, size),
       };
     }
 
     // Close any remaining open trade at last bar
     if (openTrade) {
       const lastCandle = candles[candles.length - 1];
-      const exitPrice = lastCandle.close;
+      const rawExitPrice = lastCandle.close;
+      const exitPrice = applySlippageToExit(rawExitPrice, openTrade.direction, 'end_of_data', effectiveSlippagePips, spec.pipSize);
       const pnl = openTrade.direction === "long"
         ? (exitPrice - openTrade.entryPrice) * openTrade.size * spec.lotValue
         : (openTrade.entryPrice - exitPrice) * openTrade.size * spec.lotValue;
+      const endSlippageCost = Math.abs((rawExitPrice - exitPrice) * openTrade.size * spec.lotValue);
+      totalSpreadCost += openTrade.spreadCost;
+      totalSlippageCost += endSlippageCost;
       balance += pnl;
 
       trades.push({
@@ -558,12 +680,16 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
         exitTime: lastCandle.datetime,
         direction: openTrade.direction,
         entryPrice: openTrade.entryPrice,
+        rawEntryPrice: openTrade.rawEntryPrice,
         exitPrice,
+        rawExitPrice,
         stopLoss: openTrade.stopLoss,
         takeProfit: openTrade.takeProfit,
         size: openTrade.size,
         pnl,
         pnlPercent: (pnl / (balance - pnl)) * 100,
+        spreadCost: openTrade.spreadCost,
+        slippageCost: endSlippageCost,
         exitReason: "end_of_data",
         confluenceScore: openTrade.confluenceScore,
         bias: openTrade.bias,
@@ -700,6 +826,15 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
         slMethod: config.exit.stopLossMethod,
         tpMethod: config.exit.takeProfitMethod,
       },
+      spreadSlippageConfig: {
+        spreadPips: effectiveSpreadPips,
+        slippagePips: effectiveSlippagePips,
+        useRealisticSpread: btConfig.useRealisticSpread !== false,
+      },
+      totalSpreadCost: Math.round(totalSpreadCost * 100) / 100,
+      totalSlippageCost: Math.round(totalSlippageCost * 100) / 100,
+      avgSpreadCostPerTrade: trades.length > 0 ? Math.round((totalSpreadCost / trades.length) * 100) / 100 : 0,
+      avgSlippageCostPerTrade: trades.length > 0 ? Math.round((totalSlippageCost / trades.length) * 100) / 100 : 0,
       totalTrades: trades.length,
       winningTrades: winningTrades.length,
       losingTrades: losingTrades.length,

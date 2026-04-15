@@ -436,6 +436,7 @@ export async function updateConfig(partial: Partial<BotConfig>, userId?: number)
  */
 export async function resetConfig(userId?: number): Promise<BotConfig> {
   currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  configLoaded = true;
 
   const uid = userId ?? currentUserId;
   if (uid) {

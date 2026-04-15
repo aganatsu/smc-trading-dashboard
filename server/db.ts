@@ -1,6 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection, botConfigs, InsertBotConfigRow, tradeReasonings, InsertTradeReasoningRow, tradePostMortems, InsertTradePostMortemRow, userSettings, InsertUserSettingsRow } from "../drizzle/schema";
+import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection, botConfigs, InsertBotConfigRow, tradeReasonings, InsertTradeReasoningRow, tradePostMortems, InsertTradePostMortemRow, userSettings, InsertUserSettingsRow, paperAccounts, InsertPaperAccountRow, paperPositions, InsertPaperPositionRow, paperTradeHistory, InsertPaperTradeHistoryRow } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -431,4 +431,113 @@ export async function updateTradePostMortemJson(tradeId: number, userId: number,
     .update(trades)
     .set({ postMortemJson })
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
+}
+
+// ── Paper Account Persistence ──
+
+export async function getPaperAccount(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(paperAccounts)
+    .where(eq(paperAccounts.userId, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertPaperAccount(userId: number, data: Partial<Omit<InsertPaperAccountRow, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) {
+  const db = await getDb();
+  if (!db) return;
+
+  const existing = await getPaperAccount(userId);
+  if (existing) {
+    await db
+      .update(paperAccounts)
+      .set(data)
+      .where(eq(paperAccounts.userId, userId));
+  } else {
+    await db.insert(paperAccounts).values({
+      userId,
+      balance: data.balance ?? "10000.00",
+      peakBalance: data.peakBalance ?? "10000.00",
+      dailyPnlBase: data.dailyPnlBase ?? "10000.00",
+      ...data,
+    });
+  }
+}
+
+// ── Paper Positions Persistence ──
+
+export async function getPaperPositions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(paperPositions)
+    .where(and(eq(paperPositions.userId, userId), eq(paperPositions.status, 'open')));
+}
+
+export async function getPaperPendingOrders(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(paperPositions)
+    .where(and(eq(paperPositions.userId, userId), eq(paperPositions.status, 'pending')));
+}
+
+export async function insertPaperPosition(data: InsertPaperPositionRow) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(paperPositions).values(data);
+}
+
+export async function deletePaperPosition(userId: number, positionId: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db
+    .delete(paperPositions)
+    .where(and(eq(paperPositions.userId, userId), eq(paperPositions.positionId, positionId)));
+}
+
+export async function deleteAllPaperPositions(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(paperPositions).where(eq(paperPositions.userId, userId));
+}
+
+// ── Paper Trade History Persistence ──
+
+export async function insertPaperTradeHistory(data: InsertPaperTradeHistoryRow) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(paperTradeHistory).values(data);
+}
+
+export async function getPaperTradeHistory(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(paperTradeHistory)
+    .where(eq(paperTradeHistory.userId, userId))
+    .orderBy(desc(paperTradeHistory.createdAt))
+    .limit(limit);
+}
+
+export async function deleteAllPaperTradeHistory(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(paperTradeHistory).where(eq(paperTradeHistory.userId, userId));
 }

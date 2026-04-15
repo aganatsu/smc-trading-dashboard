@@ -6,11 +6,13 @@
  * Features: keyboard shortcuts (1-5), sidebar filter (/ shortcut), macOS padding
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   LayoutDashboard, LineChart, Bot, BookOpen, Settings,
   Wifi, WifiOff, Clock, Activity, Search, FlaskConical
 } from 'lucide-react';
+
+import { useGlobalPriceFeed } from '@/hooks/useWebSocketPrices';
 
 // View imports
 import DashboardView from '@/pages/DashboardView';
@@ -51,6 +53,10 @@ export default function AppShell() {
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
   const [mountedViews, setMountedViews] = useState<Set<ViewId>>(() => new Set<ViewId>(['dashboard']));
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('connected');
+
+  // WebSocket real-time price feed
+  const wsSymbols = useMemo(() => QUICK_SYMBOLS, []);
+  const { connected: wsConnected, reconnecting: wsReconnecting } = useGlobalPriceFeed(wsSymbols);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
@@ -286,6 +292,13 @@ export default function AppShell() {
         </div>
         <div className="w-px h-3 bg-border" />
         <span>PAPER MODE</span>
+        <div className="w-px h-3 bg-border" />
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-emerald-400 animate-pulse' : wsReconnecting ? 'bg-orange-400 animate-pulse' : 'bg-zinc-500'}`} />
+          <span className={wsConnected ? 'text-emerald-400' : wsReconnecting ? 'text-orange-400' : 'text-zinc-500'}>
+            {wsConnected ? 'WS Live' : wsReconnecting ? 'WS Reconnecting...' : 'WS Offline'}
+          </span>
+        </div>
         <div className="w-px h-3 bg-border" />
         <span>Yahoo Finance</span>
         <div className="flex-1" />

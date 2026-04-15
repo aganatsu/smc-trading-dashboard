@@ -1,5 +1,5 @@
 /**
- * Paper Trading Engine — In-memory simulated trading
+ * Paper Trading Engine — Simulated trading with DB persistence
  * 
  * Features:
  * - Place paper market orders with SL/TP
@@ -13,6 +13,9 @@
  * - Scan/signal/rejection counters
  * - Uptime tracking
  * - Terminal log with categorized entries
+ * - **DB persistence** — balance, positions, history survive restarts
+ * - **Execution mode** — PAPER or LIVE (with safety guards)
+ * - **Kill switch** — emergency halt all trading
  */
 
 import { nanoid } from 'nanoid';
@@ -20,6 +23,17 @@ import { notifyTradeClosed, notifyTradePlaced } from './notifications';
 import { fetchQuoteFromYahoo } from './marketData';
 import { createTrade } from './db';
 import { validateTradeAgainstConfig, getConfig } from './botConfig';
+import { executeLiveOrder, type LiveExecutionResult } from './liveExecution';
+import {
+  saveAccountState,
+  savePosition,
+  savePendingOrder,
+  removePosition,
+  saveTradeRecord,
+  restoreState,
+  clearAllState,
+  type RestoredState,
+} from './paperTradingPersistence';
 
 // Lazy import to avoid circular dependency — botEngine imports paperTrading
 let _generatePostMortem: ((position: PaperPosition, exitReason: string) => any) | null = null;
@@ -40,9 +54,9 @@ export interface PaperPosition {
   stopLoss: number | null;
   takeProfit: number | null;
   openTime: string;
-  signalReason: string;   // Why the trade was taken (e.g., "RSI Oversold, MACD Crossover")
-  signalScore: number;    // Confluence score (e.g., 7.5 out of 10)
-  orderId: string;        // Order ID for tracking
+  signalReason: string;
+  signalScore: number;
+  orderId: string;
 }
 
 export interface PaperTradeRecord {
@@ -93,6 +107,8 @@ export interface PendingOrder {
   orderType: 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop';
 }
 
+export type ExecutionMode = 'paper' | 'live';
+
 export interface PaperAccountState {
   // Account
   balance: number;
@@ -113,7 +129,7 @@ export interface PaperAccountState {
   isRunning: boolean;
   isPaused: boolean;
   startedAt: string | null;
-  uptime: number; // seconds
+  uptime: number;
   
   // Counters
   totalTrades: number;
@@ -130,6 +146,10 @@ export interface PaperAccountState {
   
   // Log
   log: LogEntry[];
+
+  // Execution mode & safety
+  executionMode: ExecutionMode;
+  killSwitchActive: boolean;
 }
 
 // ─── Pip value helpers ───────────────────────────────────────────────
@@ -183,11 +203,15 @@ let startedAt: Date | null = null;
 let priceUpdateInterval: ReturnType<typeof setInterval> | null = null;
 let ownerUserId: number | null = null;
 
+// Execution mode & safety
+let executionMode: ExecutionMode = 'paper';
+let killSwitchActive = false;
+
 // Counters
 let scanCount = 0;
 let signalCount = 0;
 let rejectedCount = 0;
-let dailyPnlBase = 0; // balance at start of day
+let dailyPnlBase = 0;
 let dailyPnlDate = '';
 
 // Log
@@ -214,6 +238,26 @@ function resetDailyPnl() {
   }
 }
 
+// ─── Persistence Helper ─────────────────────────────────────────────
+
+function persistAccountState() {
+  if (!ownerUserId) return;
+  saveAccountState(ownerUserId, {
+    balance,
+    peakBalance,
+    isRunning,
+    isPaused,
+    startedAt,
+    scanCount,
+    signalCount,
+    rejectedCount,
+    dailyPnlBase,
+    dailyPnlDate,
+    executionMode,
+    killSwitchActive,
+  });
+}
+
 // ─── Strategy Stats Calculation ─────────────────────────────────────
 
 function computeStrategyStats(): StrategyStats {
@@ -223,22 +267,18 @@ function computeStrategyStats(): StrategyStats {
   
   const winRate = closed.length > 0 ? (wins.length / closed.length) * 100 : 0;
   
-  // Average R:R
   const rrValues = closed.map(t => {
     if (t.pnlPips === 0) return 0;
-    return Math.abs(t.pnlPips) / 10; // simplified
+    return Math.abs(t.pnlPips) / 10;
   });
   const avgRR = rrValues.length > 0 ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length : 0;
   
-  // Profit Factor
   const grossProfit = wins.reduce((sum, t) => sum + t.pnl, 0);
   const grossLoss = Math.abs(losses.reduce((sum, t) => sum + t.pnl, 0));
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 999 : 0;
   
-  // Expectancy
   const expectancy = closed.length > 0 ? closed.reduce((sum, t) => sum + t.pnl, 0) / closed.length : 0;
   
-  // Max Drawdown
   let peak = INITIAL_BALANCE;
   let maxDD = 0;
   let runningBal = INITIAL_BALANCE;
@@ -266,7 +306,6 @@ export async function updatePrices() {
   
   const symbols = Array.from(new Set(positions.map(p => p.symbol)));
   
-  // Increment scan count
   scanCount += symbols.length;
   
   for (const symbol of symbols) {
@@ -309,7 +348,6 @@ export async function updatePrices() {
       }
     }
     
-    // Log warning if approaching SL
     if (pos.stopLoss !== null) {
       const distToSL = Math.abs(pos.currentPrice - pos.stopLoss);
       const totalRange = Math.abs(pos.entryPrice - pos.stopLoss);
@@ -355,11 +393,20 @@ export async function updatePrices() {
   for (const orderId of toTrigger) {
     await triggerPendingOrder(orderId);
   }
+
+  // Persist account state after price updates (debounced)
+  persistAccountState();
 }
 
 // ─── Internal Close ──────────────────────────────────────────────────
 
 async function closePositionInternal(positionId: string, reason: 'manual' | 'stop_loss' | 'take_profit'): Promise<PaperTradeRecord | null> {
+  // Kill switch check
+  if (killSwitchActive && reason !== 'manual') {
+    addLog('warning', 'Kill switch active — auto-close blocked. Use manual close.');
+    return null;
+  }
+
   const idx = positions.findIndex(p => p.id === positionId);
   if (idx === -1) return null;
   
@@ -426,6 +473,13 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
     pnlPips: finalPips,
     closeReason: reason,
   });
+
+  // Persist: remove position, save trade record, update account
+  if (ownerUserId) {
+    removePosition(ownerUserId, pos.id);
+    saveTradeRecord(ownerUserId, record);
+    persistAccountState();
+  }
   
   // Auto-log to journal
   if (ownerUserId) {
@@ -461,6 +515,27 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
       console.error('[PaperTrading] Failed to auto-log trade to journal:', err);
     }
   }
+
+  // Check daily loss limit for auto-halt
+    const config = getConfig();
+    if (config.protection?.dailyLossLimit && config.protection.haltOnDailyLoss) {
+      const currentDailyLoss = Math.max(0, -(balance - dailyPnlBase));
+      if (currentDailyLoss >= config.protection.dailyLossLimit) {
+        addLog('error', `DAILY LOSS LIMIT HIT ($${currentDailyLoss.toFixed(2)} >= $${config.protection.dailyLossLimit}). Auto-halting trading.`);
+        killSwitchActive = true;
+        persistAccountState();
+      }
+    }
+
+    // Check max drawdown for auto-halt
+    if (config.protection?.cumulativeLossLimit) {
+      const totalLoss = Math.max(0, peakBalance - balance);
+      if (totalLoss >= config.protection.cumulativeLossLimit) {
+        addLog('error', `CUMULATIVE LOSS LIMIT HIT ($${totalLoss.toFixed(2)} >= $${config.protection.cumulativeLossLimit}). Auto-halting trading.`);
+        killSwitchActive = true;
+        persistAccountState();
+      }
+    }
   
   return record;
 }
@@ -522,6 +597,9 @@ export function getStatus(): PaperAccountState {
     strategy: computeStrategyStats(),
     
     log: logEntries.slice(-100),
+
+    executionMode,
+    killSwitchActive,
   };
 }
 
@@ -535,6 +613,11 @@ export async function placeOrder(params: {
   signalScore?: number;
 }): Promise<{ success: boolean; position?: PaperPosition; entryPrice?: number; error?: string }> {
   const { symbol, direction, size, stopLoss, takeProfit, signalReason, signalScore } = params;
+
+  // Kill switch check
+  if (killSwitchActive) {
+    return { success: false, error: 'Kill switch is active — all trading halted. Deactivate kill switch first.' };
+  }
   
   if (!INSTRUMENT_SPECS[symbol]) {
     return { success: false, error: `Unsupported symbol: ${symbol}` };
@@ -544,7 +627,7 @@ export async function placeOrder(params: {
     return { success: false, error: 'Invalid position size' };
   }
 
-  // ─── Bot Config Validation ──────────────────────────────────────
+  // Bot Config Validation
   const positionsForSymbol = positions.filter(p => p.symbol === symbol).length;
   const totalMargin = positions.reduce((sum, p) => sum + (p.size * p.entryPrice * 100), 0);
   const portfolioHeatPercent = balance > 0 ? (totalMargin / balance) * 100 : 0;
@@ -557,7 +640,7 @@ export async function placeOrder(params: {
     size,
     stopLoss,
     takeProfit,
-    entryPrice: 0, // will be checked after quote fetch
+    entryPrice: 0,
     currentPositions: positions.length,
     positionsForSymbol,
     portfolioHeatPercent,
@@ -622,7 +705,30 @@ export async function placeOrder(params: {
     addLog('signal', `${symbol} ${direction === 'long' ? 'BUY' : 'SELL'} Signal Detected (${reason})`);
     addLog('trade', `Executing ${direction === 'long' ? 'BUY' : 'SELL'} ${size} ${symbol} @ ${entryPrice}. Order ID: ${orderId}`);
 
-    // Notify owner of trade placement (manual orders)
+    // ─── LIVE BROKER EXECUTION ─────────────────────────────────
+    let liveResult: LiveExecutionResult | null = null;
+    if (executionMode === 'live' && ownerUserId) {
+      addLog('trade', `[LIVE MODE] Routing order to broker...`);
+      liveResult = await executeLiveOrder(ownerUserId, {
+        symbol,
+        direction,
+        size,
+        stopLoss,
+        takeProfit,
+        signalReason: reason,
+      });
+      if (liveResult.success) {
+        addLog('trade', `[LIVE] Broker fill confirmed: ${liveResult.broker?.toUpperCase()} Trade #${liveResult.brokerTradeId}${liveResult.fillPrice ? ` @ ${liveResult.fillPrice}` : ''}`);
+        // Update entry price to actual fill price if available
+        if (liveResult.fillPrice && liveResult.fillPrice > 0) {
+          position.entryPrice = liveResult.fillPrice;
+          position.currentPrice = liveResult.fillPrice;
+        }
+      } else {
+        addLog('error', `[LIVE] Broker execution failed: ${liveResult.error}. Paper position still tracked.`);
+      }
+    }
+
     notifyTradePlaced({
       symbol,
       direction,
@@ -633,6 +739,12 @@ export async function placeOrder(params: {
       reason,
       score,
     });
+
+    // Persist position and account state
+    if (ownerUserId) {
+      savePosition(ownerUserId, position);
+      persistAccountState();
+    }
     
     return { success: true, position, entryPrice };
   } catch (err: any) {
@@ -676,12 +788,17 @@ export function placePendingOrder(params: {
   signalScore?: number;
 }): { success: boolean; order?: PendingOrder; error?: string } {
   const { symbol, direction, size, triggerPrice, orderType, stopLoss, takeProfit, signalReason, signalScore } = params;
+
+  // Kill switch check
+  if (killSwitchActive) {
+    return { success: false, error: 'Kill switch is active — all trading halted.' };
+  }
   
   if (!INSTRUMENT_SPECS[symbol]) {
     return { success: false, error: `Unsupported symbol: ${symbol}` };
   }
 
-  // ─── Bot Config Validation (same as placeOrder) ─────────────────
+  // Bot Config Validation
   const positionsForSymbol = positions.filter(p => p.symbol === symbol).length;
   const totalMargin = positions.reduce((sum, p) => sum + (p.size * p.entryPrice * 100), 0);
   const portfolioHeatPercent = balance > 0 ? (totalMargin / balance) * 100 : 0;
@@ -724,6 +841,11 @@ export function placePendingOrder(params: {
   
   pendingOrders.push(order);
   addLog('trade', `Pending ${orderType.replace('_', ' ').toUpperCase()} placed: ${symbol} ${size} lots @ ${triggerPrice}`);
+
+  // Persist pending order
+  if (ownerUserId) {
+    savePendingOrder(ownerUserId, order);
+  }
   
   return { success: true, order };
 }
@@ -735,6 +857,11 @@ export function cancelPendingOrder(orderId: string): { success: boolean; error?:
   const order = pendingOrders[idx];
   pendingOrders.splice(idx, 1);
   addLog('info', `Pending order cancelled: ${order.symbol} ${order.orderType.replace('_', ' ')}`);
+
+  // Remove from DB
+  if (ownerUserId) {
+    removePosition(ownerUserId, order.id);
+  }
   
   return { success: true };
 }
@@ -747,6 +874,11 @@ async function triggerPendingOrder(orderId: string) {
   pendingOrders.splice(idx, 1);
   
   addLog('signal', `Pending order triggered: ${order.symbol} ${order.orderType.replace('_', ' ')} @ ${order.triggerPrice}`);
+
+  // Remove pending from DB (placeOrder will save the new position)
+  if (ownerUserId) {
+    removePosition(ownerUserId, order.id);
+  }
   
   await placeOrder({
     symbol: order.symbol,
@@ -769,6 +901,8 @@ export function addRejection(symbol: string, reason: string) {
   addLog('info', `${symbol}: ${reason} - skipping`);
 }
 
+// ─── Engine Controls ────────────────────────────────────────────────
+
 export function startEngine() {
   if (isRunning && !isPaused) return;
   isRunning = true;
@@ -780,10 +914,11 @@ export function startEngine() {
     dailyPnlBase = balance;
   }
   
-  addLog('system', 'Bot started with all modules active');
+  addLog('system', `Bot started in ${executionMode.toUpperCase()} mode with all modules active`);
   
   priceUpdateInterval = setInterval(updatePrices, 15000);
   updatePrices();
+  persistAccountState();
 }
 
 export function pauseEngine() {
@@ -795,6 +930,7 @@ export function pauseEngine() {
     priceUpdateInterval = null;
   }
   addLog('system', 'Bot paused');
+  persistAccountState();
 }
 
 export function stopEngine() {
@@ -806,9 +942,10 @@ export function stopEngine() {
     priceUpdateInterval = null;
   }
   addLog('system', 'Bot stopped');
+  persistAccountState();
 }
 
-export function resetAccount() {
+export async function resetAccount() {
   stopEngine();
   balance = INITIAL_BALANCE;
   peakBalance = INITIAL_BALANCE;
@@ -821,7 +958,112 @@ export function resetAccount() {
   dailyPnlBase = INITIAL_BALANCE;
   dailyPnlDate = '';
   logEntries = [];
+  killSwitchActive = false;
+  executionMode = 'paper';
   addLog('system', `Paper account RESET to $${INITIAL_BALANCE.toLocaleString()}`);
+
+  // Clear all persisted state
+  if (ownerUserId) {
+    await clearAllState(ownerUserId);
+  }
+}
+
+// ─── Execution Mode & Safety ────────────────────────────────────────
+
+export function getExecutionMode(): ExecutionMode {
+  return executionMode;
+}
+
+export function setExecutionMode(mode: ExecutionMode) {
+  executionMode = mode;
+  addLog('system', `Execution mode changed to ${mode.toUpperCase()}`);
+  persistAccountState();
+}
+
+export function isKillSwitchActive(): boolean {
+  return killSwitchActive;
+}
+
+export function activateKillSwitch() {
+  killSwitchActive = true;
+  addLog('error', 'KILL SWITCH ACTIVATED — All trading halted immediately');
+  
+  // Stop the engine
+  if (isRunning) {
+    pauseEngine();
+  }
+  persistAccountState();
+}
+
+export function deactivateKillSwitch() {
+  killSwitchActive = false;
+  addLog('system', 'Kill switch deactivated — Trading can resume');
+  persistAccountState();
+}
+
+export async function emergencyCloseAll(): Promise<{ closed: number; errors: number }> {
+  let closed = 0;
+  let errors = 0;
+  
+  addLog('error', `EMERGENCY CLOSE ALL — Closing ${positions.length} positions`);
+  
+  // Close all positions
+  const positionIds = positions.map(p => p.id);
+  for (const id of positionIds) {
+    const result = await closePositionInternal(id, 'manual');
+    if (result) {
+      closed++;
+    } else {
+      errors++;
+    }
+  }
+  
+  // Cancel all pending orders
+  const orderIds = pendingOrders.map(o => o.id);
+  for (const id of orderIds) {
+    cancelPendingOrder(id);
+  }
+  
+  addLog('system', `Emergency close complete: ${closed} positions closed, ${orderIds.length} pending orders cancelled`);
+  
+  return { closed, errors };
+}
+
+// ─── State Restoration ──────────────────────────────────────────────
+
+export async function restoreFromDb(userId: number): Promise<boolean> {
+  try {
+    const state = await restoreState(userId);
+    if (!state) {
+      addLog('system', 'No saved state found — starting fresh');
+      return false;
+    }
+
+    balance = state.balance;
+    peakBalance = state.peakBalance;
+    positions = state.positions;
+    pendingOrders = state.pendingOrders;
+    tradeHistory = state.tradeHistory;
+    scanCount = state.scanCount;
+    signalCount = state.signalCount;
+    rejectedCount = state.rejectedCount;
+    dailyPnlBase = state.dailyPnlBase;
+    dailyPnlDate = state.dailyPnlDate;
+    executionMode = state.executionMode;
+    killSwitchActive = state.killSwitchActive;
+    // Always start stopped after restart
+    isRunning = false;
+    isPaused = false;
+    startedAt = null;
+
+    addLog('system', `State restored from DB: $${balance.toFixed(2)} balance, ${positions.length} positions, ${pendingOrders.length} pending orders, ${tradeHistory.length} history records`);
+    
+    return true;
+  } catch (err) {
+    console.error('[PaperTrading] Failed to restore state from DB:', err);
+    addLog('error', 'Failed to restore state from DB — starting fresh');
+    return false;
+  }
 }
 
 export function getLog(): LogEntry[] {

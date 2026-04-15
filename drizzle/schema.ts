@@ -198,3 +198,87 @@ export const userSettings = mysqlTable("user_settings", {
 
 export type UserSettingsRow = typeof userSettings.$inferSelect;
 export type InsertUserSettingsRow = typeof userSettings.$inferInsert;
+
+/**
+ * Paper trading account state — persists balance, counters, and engine state so it survives restarts.
+ * Single row per user (upsert pattern).
+ */
+export const paperAccounts = mysqlTable("paper_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  balance: decimal("balance", { precision: 18, scale: 2 }).notNull(),
+  peakBalance: decimal("peakBalance", { precision: 18, scale: 2 }).notNull(),
+  isRunning: boolean("isRunning").default(false).notNull(),
+  isPaused: boolean("isPaused").default(false).notNull(),
+  startedAt: timestamp("startedAt"),
+  /** Counters */
+  scanCount: int("scanCount").default(0).notNull(),
+  signalCount: int("signalCount").default(0).notNull(),
+  rejectedCount: int("rejectedCount").default(0).notNull(),
+  dailyPnlBase: decimal("dailyPnlBase", { precision: 18, scale: 2 }).notNull(),
+  dailyPnlDate: varchar("dailyPnlDate", { length: 10 }).default("").notNull(),
+  /** Execution mode: paper or live */
+  executionMode: mysqlEnum("executionMode", ["paper", "live"]).default("paper").notNull(),
+  /** Kill switch — halts all trading immediately */
+  killSwitchActive: boolean("killSwitchActive").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaperAccountRow = typeof paperAccounts.$inferSelect;
+export type InsertPaperAccountRow = typeof paperAccounts.$inferInsert;
+
+/**
+ * Paper trading positions — persists open positions so they survive restarts.
+ */
+export const paperPositions = mysqlTable("paper_positions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  positionId: varchar("positionId", { length: 32 }).notNull(),
+  symbol: varchar("symbol", { length: 32 }).notNull(),
+  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
+  size: decimal("size", { precision: 18, scale: 8 }).notNull(),
+  entryPrice: decimal("entryPrice", { precision: 18, scale: 8 }).notNull(),
+  currentPrice: decimal("currentPrice", { precision: 18, scale: 8 }).notNull(),
+  stopLoss: decimal("stopLoss", { precision: 18, scale: 8 }),
+  takeProfit: decimal("takeProfit", { precision: 18, scale: 8 }),
+  openTime: varchar("openTime", { length: 64 }).notNull(),
+  signalReason: text("signalReason"),
+  signalScore: decimal("signalScore", { precision: 5, scale: 1 }).default("0").notNull(),
+  orderId: varchar("orderId", { length: 32 }).notNull(),
+  /** 'open' or 'pending' */
+  status: mysqlEnum("positionStatus", ["open", "pending"]).default("open").notNull(),
+  /** For pending orders */
+  triggerPrice: decimal("triggerPrice", { precision: 18, scale: 8 }),
+  orderType: varchar("orderType", { length: 16 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PaperPositionRow = typeof paperPositions.$inferSelect;
+export type InsertPaperPositionRow = typeof paperPositions.$inferInsert;
+
+/**
+ * Paper trade history — persists closed paper trades so they survive restarts.
+ */
+export const paperTradeHistory = mysqlTable("paper_trade_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  positionId: varchar("positionId", { length: 32 }).notNull(),
+  symbol: varchar("symbol", { length: 32 }).notNull(),
+  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
+  size: decimal("size", { precision: 18, scale: 8 }).notNull(),
+  entryPrice: decimal("entryPrice", { precision: 18, scale: 8 }).notNull(),
+  exitPrice: decimal("exitPrice", { precision: 18, scale: 8 }).notNull(),
+  pnl: decimal("pnl", { precision: 18, scale: 2 }).notNull(),
+  pnlPips: decimal("pnlPips", { precision: 12, scale: 2 }).notNull(),
+  openTime: varchar("openTime", { length: 64 }).notNull(),
+  closedAt: varchar("closedAt", { length: 64 }).notNull(),
+  closeReason: varchar("closeReason", { length: 32 }).notNull(),
+  signalReason: text("signalReason"),
+  signalScore: decimal("signalScore", { precision: 5, scale: 1 }).default("0").notNull(),
+  orderId: varchar("orderId", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PaperTradeHistoryRow = typeof paperTradeHistory.$inferSelect;
+export type InsertPaperTradeHistoryRow = typeof paperTradeHistory.$inferInsert;

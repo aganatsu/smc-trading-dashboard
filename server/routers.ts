@@ -27,6 +27,10 @@ import {
   cancelPendingOrder as cancelPaperPendingOrder,
   startEngine, pauseEngine, stopEngine, resetAccount,
   setOwnerUserId, getLog as getPaperLog,
+  activateKillSwitch, deactivateKillSwitch,
+  getExecutionMode, setExecutionMode,
+  emergencyCloseAll,
+  type ExecutionMode,
 } from "./paperTrading";
 import { getConfig, updateConfig, resetConfig, loadConfigFromDb, isConfigLoaded, type BotConfig } from "./botConfig";
 import {
@@ -71,6 +75,8 @@ import {
 } from "./botEngine";
 import { getFundamentalsData, getEventsForPair, hasUpcomingHighImpact } from "./fundamentals";
 import { runBacktest, getBacktestProgress, getLastBacktestResult } from "./backtest";
+import { getLiveBrokerStatus, setActiveBrokerConnection, getActiveBrokerConnectionId } from "./liveExecution";
+import { getConnectedClientCount, getAllLatestPrices } from "./wsPriceFeed";
 
 export const appRouter = router({
   system: systemRouter,
@@ -611,6 +617,48 @@ export const appRouter = router({
     log: publicProcedure.query(() => {
       return getPaperLog();
     }),
+
+    // ── Safety Controls ──
+
+    killSwitch: protectedProcedure
+      .input(z.object({ active: z.boolean() }))
+      .mutation(({ input }) => {
+        if (input.active) {
+          activateKillSwitch();
+        } else {
+          deactivateKillSwitch();
+        }
+        return { success: true, killSwitchActive: input.active };
+      }),
+
+    executionMode: protectedProcedure
+      .input(z.object({ mode: z.enum(["paper", "live"]) }))
+      .mutation(({ input }) => {
+        setExecutionMode(input.mode as ExecutionMode);
+        return { success: true, mode: input.mode };
+      }),
+
+    emergencyCloseAll: protectedProcedure
+      .mutation(async () => {
+        return emergencyCloseAll();
+      }),
+
+    liveBrokerStatus: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getLiveBrokerStatus(ctx.user.id);
+      }),
+
+    setActiveBroker: protectedProcedure
+      .input(z.object({ connectionId: z.number().nullable() }))
+      .mutation(({ input }) => {
+        setActiveBrokerConnection(input.connectionId);
+        return { success: true, connectionId: input.connectionId };
+      }),
+
+    getActiveBroker: protectedProcedure
+      .query(() => {
+        return { connectionId: getActiveBrokerConnectionId() };
+      }),
   }),
 
   // ── ICT Analysis Endpoints ──
@@ -914,6 +962,10 @@ export const appRouter = router({
             activeDays: z.record(z.string(), z.boolean()).optional(),
           }).optional(),
         }).optional(),
+        // Spread & slippage simulation
+        spreadPips: z.number().min(0).max(50).optional(),
+        slippagePips: z.number().min(0).max(10).optional(),
+        useRealisticSpread: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const result = await runBacktest({
@@ -924,6 +976,9 @@ export const appRouter = router({
           initialBalance: input.initialBalance,
           useCurrentConfig: input.useCurrentConfig,
           configOverrides: input.configOverrides as any,
+          spreadPips: input.spreadPips,
+          slippagePips: input.slippagePips,
+          useRealisticSpread: input.useRealisticSpread,
         });
         return result;
       }),
@@ -978,6 +1033,16 @@ export const appRouter = router({
         await upsertUserSettings(ctx.user.id, { preferencesJson: input });
         return { success: true };
       }),
+  }),
+
+  // ─── WebSocket Price Feed Status ───────────────────────────────────
+  ws: router({
+    status: publicProcedure.query(() => {
+      return {
+        connectedClients: getConnectedClientCount(),
+        latestPrices: getAllLatestPrices(),
+      };
+    }),
   }),
 });
 export type AppRouter = typeof appRouter;

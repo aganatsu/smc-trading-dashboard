@@ -216,6 +216,11 @@ export default function BacktestView() {
   const [exit, setExit] = useState<ExitConfig>({ ...DEFAULT_EXIT });
   const [session, setSession] = useState<SessionConfig>({ ...DEFAULT_SESSION });
 
+  // Spread & slippage simulation
+  const [useRealisticSpread, setUseRealisticSpread] = useState(true);
+  const [customSpreadPips, setCustomSpreadPips] = useState(0);
+  const [slippagePips, setSlippagePips] = useState(0.5);
+
   // UI state
   const [expandedConfig, setExpandedConfig] = useState<Set<string>>(new Set(["general"]));
   const [expandedResults, setExpandedResults] = useState<Set<string>>(
@@ -319,6 +324,9 @@ export default function BacktestView() {
       initialBalance,
       useCurrentConfig,
       configOverrides: overrides,
+      spreadPips: useRealisticSpread ? undefined : customSpreadPips,
+      slippagePips,
+      useRealisticSpread,
     });
   };
 
@@ -724,6 +732,41 @@ export default function BacktestView() {
               </div>
             </Field>
           </ConfigSection>
+
+          {/* Spread & Slippage */}
+          <ConfigSection
+            id="spread"
+            title="Spread & Slippage"
+            icon={<TrendingDown className="w-3.5 h-3.5" />}
+            expanded={expandedConfig.has("spread")}
+            onToggle={() => toggleConfig("spread")}
+          >
+            <Toggle label="Realistic Spreads" value={useRealisticSpread} onChange={setUseRealisticSpread} />
+            <p className="text-[10px] font-mono text-muted-foreground -mt-1 mb-1">
+              {useRealisticSpread ? "Using per-instrument default spreads (e.g., EUR/USD: 1.0 pip)" : "Using custom fixed spread"}
+            </p>
+            {!useRealisticSpread && (
+              <Field label="Custom Spread (pips)">
+                <input
+                  type="number" min={0} max={50} step={0.1}
+                  value={customSpreadPips}
+                  onChange={e => setCustomSpreadPips(Number(e.target.value))}
+                  className="w-full bg-background border border-border text-foreground text-xs font-mono px-2 py-1.5 focus:border-cyan focus:outline-none"
+                />
+              </Field>
+            )}
+            <Field label="Max Slippage (pips)">
+              <input
+                type="number" min={0} max={10} step={0.1}
+                value={slippagePips}
+                onChange={e => setSlippagePips(Number(e.target.value))}
+                className="w-full bg-background border border-border text-foreground text-xs font-mono px-2 py-1.5 focus:border-cyan focus:outline-none"
+              />
+            </Field>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Slippage is applied adversely on SL hits. Set to 0 for ideal fills.
+            </p>
+          </ConfigSection>
         </div>
       </div>
 
@@ -1103,6 +1146,43 @@ export default function BacktestView() {
                   </div>
                 </div>
               </div>
+
+              {/* Spread & Slippage Impact */}
+              {result.spreadSlippageConfig && (
+                <div className="bg-muted/20 border border-border p-2.5 mt-2">
+                  <div className="text-[10px] font-mono text-warning uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <TrendingDown className="w-3 h-3" /> Spread & Slippage Impact
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-xs font-mono">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Spread</div>
+                      <div className="text-foreground">{result.spreadSlippageConfig.spreadPips.toFixed(1)} pips</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Slippage</div>
+                      <div className="text-foreground">{result.spreadSlippageConfig.slippagePips.toFixed(1)} pips</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Total Spread Cost</div>
+                      <div className="text-bearish">${result.totalSpreadCost.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Total Slippage Cost</div>
+                      <div className="text-bearish">${result.totalSlippageCost.toFixed(2)}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-1.5 text-xs font-mono">
+                    <div>
+                      <span className="text-muted-foreground">Avg spread/trade: </span>
+                      <span className="text-bearish">${result.avgSpreadCostPerTrade.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Avg slippage/trade: </span>
+                      <span className="text-bearish">${result.avgSlippageCostPerTrade.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </ResultSection>
 
             {/* ── Equity + Drawdown ── */}

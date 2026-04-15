@@ -7,6 +7,10 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { ENV } from "./env";
+import { getUserByOpenId } from "../db";
+import { restoreFromDb, setOwnerUserId } from "../paperTrading";
+import { initWebSocketServer } from "../wsPriceFeed";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -57,8 +61,29 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  // Initialize WebSocket price feed
+  initWebSocketServer(server);
+
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    // Auto-restore paper trading state for the owner
+    try {
+      if (ENV.ownerOpenId) {
+        const owner = await getUserByOpenId(ENV.ownerOpenId);
+        if (owner) {
+          setOwnerUserId(owner.id);
+          const restored = await restoreFromDb(owner.id);
+          if (restored) {
+            console.log('[Startup] Paper trading state restored from DB');
+          } else {
+            console.log('[Startup] No saved paper trading state found — starting fresh');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Startup] Failed to restore paper trading state:', err);
+    }
   });
 }
 

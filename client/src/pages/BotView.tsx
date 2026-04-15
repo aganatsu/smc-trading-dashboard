@@ -81,6 +81,12 @@ export default function BotView() {
   // Position tabs
   const [posTab, setPosTab] = useState<'open' | 'pending' | 'closedToday' | 'history'>('open');
 
+  // Execution mode & safety
+  const killSwitchMut = trpc.paper.killSwitch.useMutation({ onSuccess: () => status.refetch() });
+  const executionModeMut = trpc.paper.executionMode.useMutation({ onSuccess: () => status.refetch() });
+  const emergencyCloseMut = trpc.paper.emergencyCloseAll.useMutation({ onSuccess: () => status.refetch() });
+  const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+
   // Listen for symbol sync from sidebar
   useEffect(() => {
     const handler = (e: Event) => {
@@ -198,9 +204,35 @@ export default function BotView() {
               <span className={`w-2 h-2 rounded-full ${d.isRunning ? 'bg-emerald-400 animate-pulse' : d.isPaused ? 'bg-orange-400' : 'bg-zinc-500'}`} />
               {d.isRunning ? 'Running' : d.isPaused ? 'Paused' : 'Stopped'}
             </span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-              Paper Mode
-            </span>
+            {/* Execution Mode Badge — clickable to toggle */}
+            <button
+              onClick={() => {
+                if (d.executionMode === 'paper') {
+                  setShowLiveConfirm(true);
+                } else {
+                  executionModeMut.mutate({ mode: 'paper' });
+                }
+              }}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border cursor-pointer transition ${
+                d.executionMode === 'live'
+                  ? 'bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+              }`}
+            >
+              {d.executionMode === 'live' ? '● LIVE' : 'Paper Mode'}
+            </button>
+            {/* Kill Switch */}
+            <button
+              onClick={() => killSwitchMut.mutate({ active: !d.killSwitchActive })}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border transition ${
+                d.killSwitchActive
+                  ? 'bg-red-600/30 text-red-300 border-red-500/50 animate-pulse'
+                  : 'bg-zinc-700/30 text-zinc-500 border-zinc-600/30 hover:bg-zinc-700/50 hover:text-zinc-400'
+              }`}
+              title={d.killSwitchActive ? 'Kill switch is ACTIVE — click to deactivate' : 'Click to activate kill switch (halt all trading)'}
+            >
+              {d.killSwitchActive ? '⚠ KILL SWITCH ON' : '⊘ Kill Switch'}
+            </button>
           </div>
           {d.uptime > 0 && (
             <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Uptime: {formatUptime(d.uptime)}</span>
@@ -789,6 +821,87 @@ export default function BotView() {
 
       {/* Bot Config Modal */}
       {showConfig && <BotConfigPanel onClose={() => setShowConfig(false)} />}
+
+      {/* ═══ KILL SWITCH BANNER ═══ */}
+      {d.killSwitchActive && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚠</span>
+            <span className="font-bold text-sm uppercase tracking-wider">Kill Switch Active — All Trading Halted</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => emergencyCloseMut.mutate()}
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs font-bold uppercase rounded transition"
+            >
+              Close All Positions
+            </button>
+            <button
+              onClick={() => killSwitchMut.mutate({ active: false })}
+              className="px-3 py-1 bg-white text-red-600 text-xs font-bold uppercase rounded hover:bg-white/90 transition"
+            >
+              Deactivate
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ LIVE MODE CONFIRMATION DIALOG ═══ */}
+      {showLiveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-red-500/50 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <span className="text-red-400 text-xl">⚠</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Switch to LIVE Mode?</h3>
+                <p className="text-xs text-muted-foreground">This will route orders to your connected broker</p>
+              </div>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded p-3 mb-4">
+              <p className="text-sm text-red-300 font-medium mb-2">Warning: Live mode will execute real trades with real money.</p>
+              <ul className="text-xs text-red-300/80 space-y-1">
+                <li>• Orders will be sent to your connected broker (OANDA / MetaApi)</li>
+                <li>• Paper positions will still be tracked for unified P&L</li>
+                <li>• Use the Kill Switch to halt all trading immediately</li>
+                <li>• Ensure your broker connection is configured in Settings</li>
+              </ul>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLiveConfirm(false)}
+                className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-bold rounded transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  executionModeMut.mutate({ mode: 'live' });
+                  setShowLiveConfirm(false);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded transition"
+              >
+                Enable LIVE Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ LIVE MODE TOP BANNER ═══ */}
+      {d.executionMode === 'live' && !d.killSwitchActive && (
+        <div className="fixed top-0 left-0 right-0 z-40 bg-red-600/90 text-white px-4 py-1 flex items-center justify-center gap-3">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span className="text-xs font-bold uppercase tracking-wider">Live Trading Active — Real Money at Risk</span>
+          <button
+            onClick={() => executionModeMut.mutate({ mode: 'paper' })}
+            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold uppercase rounded transition ml-2"
+          >
+            Switch to Paper
+          </button>
+        </div>
+      )}
     </div>
   );
 }

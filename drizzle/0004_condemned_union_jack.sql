@@ -1,0 +1,62 @@
+CREATE TABLE `paper_accounts` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`balance` decimal(18,2) NOT NULL,
+	`peakBalance` decimal(18,2) NOT NULL,
+	`isRunning` boolean NOT NULL DEFAULT false,
+	`isPaused` boolean NOT NULL DEFAULT false,
+	`startedAt` timestamp,
+	`scanCount` int NOT NULL DEFAULT 0,
+	`signalCount` int NOT NULL DEFAULT 0,
+	`rejectedCount` int NOT NULL DEFAULT 0,
+	`dailyPnlBase` decimal(18,2) NOT NULL,
+	`dailyPnlDate` varchar(10) NOT NULL DEFAULT '',
+	`executionMode` enum('paper','live') NOT NULL DEFAULT 'paper',
+	`killSwitchActive` boolean NOT NULL DEFAULT false,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `paper_accounts_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `paper_positions` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`positionId` varchar(32) NOT NULL,
+	`symbol` varchar(32) NOT NULL,
+	`direction` enum('long','short') NOT NULL,
+	`size` decimal(18,8) NOT NULL,
+	`entryPrice` decimal(18,8) NOT NULL,
+	`currentPrice` decimal(18,8) NOT NULL,
+	`stopLoss` decimal(18,8),
+	`takeProfit` decimal(18,8),
+	`openTime` varchar(64) NOT NULL,
+	`signalReason` text,
+	`signalScore` decimal(5,1) NOT NULL DEFAULT '0',
+	`orderId` varchar(32) NOT NULL,
+	`positionStatus` enum('open','pending') NOT NULL DEFAULT 'open',
+	`triggerPrice` decimal(18,8),
+	`orderType` varchar(16),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `paper_positions_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `paper_trade_history` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`positionId` varchar(32) NOT NULL,
+	`symbol` varchar(32) NOT NULL,
+	`direction` enum('long','short') NOT NULL,
+	`size` decimal(18,8) NOT NULL,
+	`entryPrice` decimal(18,8) NOT NULL,
+	`exitPrice` decimal(18,8) NOT NULL,
+	`pnl` decimal(18,2) NOT NULL,
+	`pnlPips` decimal(12,2) NOT NULL,
+	`openTime` varchar(64) NOT NULL,
+	`closedAt` varchar(64) NOT NULL,
+	`closeReason` varchar(32) NOT NULL,
+	`signalReason` text,
+	`signalScore` decimal(5,1) NOT NULL DEFAULT '0',
+	`orderId` varchar(32) NOT NULL,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `paper_trade_history_id` PRIMARY KEY(`id`)
+);
