@@ -48,16 +48,21 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication failed — fall back to owner user for single-user mode
-    user = null;
-  }
-
-  // If no authenticated user, use the owner as default (single-user mode)
-  if (!user) {
+  // In standalone mode (Electron), skip OAuth entirely — always use owner
+  if (process.env.STANDALONE_MODE === 'true') {
     user = await getOrCreateOwnerUser();
+  } else {
+    try {
+      user = await sdk.authenticateRequest(opts.req);
+    } catch (error) {
+      // Authentication failed — fall back to owner user for single-user mode
+      user = null;
+    }
+
+    // If no authenticated user, use the owner as default (single-user mode)
+    if (!user) {
+      user = await getOrCreateOwnerUser();
+    }
   }
 
   return {

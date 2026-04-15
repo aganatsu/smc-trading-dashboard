@@ -8,7 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
-import { getUserByOpenId } from "../db";
+import { getDb, initializeSchema, getUserByOpenId } from "../db";
 import { restoreFromDb, setOwnerUserId } from "../paperTrading";
 import { initWebSocketServer } from "../wsPriceFeed";
 
@@ -32,6 +32,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Initialize SQLite database and schema
+  try {
+    await getDb();
+    await initializeSchema();
+    console.log('[Database] SQLite schema initialized');
+  } catch (err) {
+    console.error('[Database] Failed to initialize:', err);
+  }
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads

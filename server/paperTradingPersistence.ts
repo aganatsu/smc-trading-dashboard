@@ -189,7 +189,7 @@ export async function restoreState(userId: number): Promise<RestoredState | null
     const positions: PaperPosition[] = dbPositions.map(row => ({
       id: row.positionId,
       symbol: row.symbol,
-      direction: row.direction,
+      direction: row.direction as 'long' | 'short',
       size: parseFloat(row.size),
       entryPrice: parseFloat(row.entryPrice),
       currentPrice: parseFloat(row.currentPrice),
@@ -205,7 +205,7 @@ export async function restoreState(userId: number): Promise<RestoredState | null
     const pendingOrders: PendingOrder[] = dbPending.map(row => ({
       id: row.positionId,
       symbol: row.symbol,
-      direction: row.direction,
+      direction: row.direction as 'long' | 'short',
       size: parseFloat(row.size),
       triggerPrice: row.triggerPrice ? parseFloat(row.triggerPrice) : parseFloat(row.entryPrice),
       stopLoss: row.stopLoss ? parseFloat(row.stopLoss) : null,
@@ -219,7 +219,7 @@ export async function restoreState(userId: number): Promise<RestoredState | null
     const tradeHistory: PaperTradeRecord[] = dbHistory.map(row => ({
       id: row.positionId,
       symbol: row.symbol,
-      direction: row.direction,
+      direction: row.direction as 'long' | 'short',
       size: parseFloat(row.size),
       entryPrice: parseFloat(row.entryPrice),
       exitPrice: parseFloat(row.exitPrice),
@@ -244,8 +244,8 @@ export async function restoreState(userId: number): Promise<RestoredState | null
       rejectedCount: account.rejectedCount,
       dailyPnlBase: parseFloat(account.dailyPnlBase),
       dailyPnlDate: account.dailyPnlDate,
-      executionMode: account.executionMode,
-      killSwitchActive: account.killSwitchActive,
+      executionMode: (account.executionMode as 'paper' | 'live') || 'paper',
+      killSwitchActive: Boolean(account.killSwitchActive),
       positions,
       pendingOrders,
       tradeHistory,

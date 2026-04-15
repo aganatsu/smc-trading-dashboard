@@ -1,0 +1,70 @@
+appId: com.smc-trading.dashboard
+productName: SMC Trading Dashboard
+copyright: Copyright © 2025
+publish: null
+
+directories:
+  output: electron-dist
+  buildResources: electron/resources
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - node_modules/**/*
+  - package.json
+
+extraMetadata:
+  main: electron/main.mjs
+
+mac:
+  category: public.app-category.finance
+  target:
+    - target: dmg
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  darkModeSupport: true
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: SMC Trading Dashboard
+  iconSize: 80
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Finance
+
+asar: false
+
+# Native modules need to be rebuilt for the target platform
+npmRebuild: true
+nodeGypRebuild: false
+
+# Include better-sqlite3 native module
+asarUnpack:
+  - node_modules/better-sqlite3/**/*

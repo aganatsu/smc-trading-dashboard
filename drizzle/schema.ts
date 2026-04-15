@@ -1,25 +1,30 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json } from "drizzle-orm/mysql-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
+ * Migrated from MySQL to SQLite for standalone Electron desktop app.
+ * 
+ * Key SQLite differences:
+ * - No native enum → use text with application-level validation
+ * - No native decimal → use real (float64) for prices, text for precise money
+ * - No native boolean → use integer mode:'boolean' (0/1)
+ * - No native timestamp → use integer (Unix epoch ms) or text (ISO string)
+ * - No onUpdateNow() → handled in application code
+ * - No varchar length limits → all text columns are unlimited
  */
-export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
-  id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  /** 'user' | 'admin' — no native enum in SQLite */
+  role: text("role").default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type User = typeof users.$inferSelect;
@@ -27,86 +32,60 @@ export type InsertUser = typeof users.$inferInsert;
 
 /**
  * Trade journal entries — records each trade with full details for review.
+ * Prices stored as text to preserve decimal precision (avoid float rounding).
  */
-export const trades = mysqlTable("trades", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  /** Trading instrument symbol e.g. "EUR/USD", "BTC/USD", "XAU/USD" */
-  symbol: varchar("symbol", { length: 32 }).notNull(),
-  /** Trade direction */
-  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
-  /** Trade status */
-  status: mysqlEnum("status", ["open", "closed", "cancelled"]).default("open").notNull(),
-  /** Entry price */
-  entryPrice: decimal("entryPrice", { precision: 18, scale: 8 }).notNull(),
-  /** Exit price (null if still open) */
-  exitPrice: decimal("exitPrice", { precision: 18, scale: 8 }),
-  /** Stop loss price */
-  stopLoss: decimal("stopLoss", { precision: 18, scale: 8 }),
-  /** Take profit price */
-  takeProfit: decimal("takeProfit", { precision: 18, scale: 8 }),
-  /** Position size / lot size */
-  positionSize: decimal("positionSize", { precision: 18, scale: 8 }),
-  /** Risk-reward ratio at entry */
-  riskReward: decimal("riskReward", { precision: 8, scale: 2 }),
-  /** Risk percentage of account */
-  riskPercent: decimal("riskPercent", { precision: 8, scale: 2 }),
-  /** Realized P&L in pips or points */
-  pnlPips: decimal("pnlPips", { precision: 12, scale: 2 }),
-  /** Realized P&L in account currency */
-  pnlAmount: decimal("pnlAmount", { precision: 18, scale: 2 }),
-  /** Timeframe used for entry */
-  timeframe: varchar("timeframe", { length: 10 }),
-  /** Whether trader followed the strategy */
-  followedStrategy: boolean("followedStrategy"),
-  /** Entry setup type (e.g. "OB Retest", "FVG Entry", "Liquidity Sweep") */
-  setupType: varchar("setupType", { length: 64 }),
-  /** Free-form notes about the trade */
+export const trades = sqliteTable("trades", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  symbol: text("symbol").notNull(),
+  /** 'long' | 'short' */
+  direction: text("direction").notNull(),
+  /** 'open' | 'closed' | 'cancelled' */
+  status: text("status").default("open").notNull(),
+  entryPrice: text("entryPrice").notNull(),
+  exitPrice: text("exitPrice"),
+  stopLoss: text("stopLoss"),
+  takeProfit: text("takeProfit"),
+  positionSize: text("positionSize"),
+  riskReward: text("riskReward"),
+  riskPercent: text("riskPercent"),
+  pnlPips: text("pnlPips"),
+  pnlAmount: text("pnlAmount"),
+  timeframe: text("timeframe"),
+  followedStrategy: integer("followedStrategy", { mode: "boolean" }),
+  setupType: text("setupType"),
   notes: text("notes"),
-  /** Deviations from the trading plan */
   deviations: text("deviations"),
-  /** Areas for improvement */
   improvements: text("improvements"),
-  /** Trade entry timestamp */
-  entryTime: timestamp("entryTime").notNull(),
-  /** Trade exit timestamp */
-  exitTime: timestamp("exitTime"),
-  /** Screenshot URL from S3 */
+  entryTime: integer("entryTime", { mode: "timestamp" }).notNull(),
+  exitTime: integer("exitTime", { mode: "timestamp" }),
   screenshotUrl: text("screenshotUrl"),
-  /** Bot confluence score at entry (0-100) */
-  confluenceScore: int("confluenceScore"),
-  /** Bot reasoning JSON — full TradeReasoning object from the engine */
-  reasoningJson: json("reasoningJson"),
-  /** Bot post-mortem JSON — full TradePostMortem object after close */
-  postMortemJson: json("postMortemJson"),
-  /** Record timestamps */
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  confluenceScore: integer("confluenceScore"),
+  /** JSON stored as text */
+  reasoningJson: text("reasoningJson", { mode: "json" }),
+  postMortemJson: text("postMortemJson", { mode: "json" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type Trade = typeof trades.$inferSelect;
 export type InsertTrade = typeof trades.$inferInsert;
 
 /**
- * Broker connections — stores encrypted API credentials for each user's broker accounts.
+ * Broker connections — stores API credentials for each user's broker accounts.
  */
-export const brokerConnections = mysqlTable("broker_connections", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  /** Broker type */
-  brokerType: mysqlEnum("brokerType", ["oanda", "metaapi"]).notNull(),
-  /** Display name for this connection */
-  displayName: varchar("displayName", { length: 128 }).notNull(),
-  /** API key / token (encrypted at rest) */
+export const brokerConnections = sqliteTable("broker_connections", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  /** 'oanda' | 'metaapi' */
+  brokerType: text("brokerType").notNull(),
+  displayName: text("displayName").notNull(),
   apiKey: text("apiKey").notNull(),
-  /** Broker account ID */
-  accountId: varchar("accountId", { length: 128 }).notNull(),
-  /** Whether this is a live or practice/demo account */
-  isLive: boolean("isLive").default(false).notNull(),
-  /** Whether this connection is active */
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  accountId: text("accountId").notNull(),
+  isLive: integer("isLive", { mode: "boolean" }).default(false).notNull(),
+  isActive: integer("isActive", { mode: "boolean" }).default(true).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type BrokerConnection = typeof brokerConnections.$inferSelect;
@@ -116,13 +95,12 @@ export type InsertBrokerConnection = typeof brokerConnections.$inferInsert;
  * Bot configuration — persists the full BotConfig JSON so it survives server restarts.
  * Single row per user (upsert pattern).
  */
-export const botConfigs = mysqlTable("bot_configs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  /** Full BotConfig JSON object */
-  configJson: json("configJson").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const botConfigs = sqliteTable("bot_configs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  configJson: text("configJson", { mode: "json" }).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type BotConfigRow = typeof botConfigs.$inferSelect;
@@ -130,25 +108,22 @@ export type InsertBotConfigRow = typeof botConfigs.$inferInsert;
 
 /**
  * Trade reasonings — persists the bot's reasoning for each trade it places.
- * Linked to trades by positionId (the paper trading position ID string).
  */
-export const tradeReasonings = mysqlTable("trade_reasonings", {
-  id: int("id").autoincrement().primaryKey(),
-  /** Paper trading position ID (string) */
-  positionId: varchar("positionId", { length: 64 }).notNull(),
-  /** Trade ID in the trades table (if logged to journal) */
-  tradeId: int("tradeId"),
-  symbol: varchar("symbol", { length: 32 }).notNull(),
-  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
-  confluenceScore: int("confluenceScore").notNull(),
-  session: varchar("session", { length: 32 }),
-  timeframe: varchar("timeframe", { length: 10 }),
-  bias: varchar("bias", { length: 16 }),
-  /** JSON array of { concept, weight, present, detail } */
-  factorsJson: json("factorsJson"),
-  /** Human-readable summary of why the trade was taken */
+export const tradeReasonings = sqliteTable("trade_reasonings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  positionId: text("positionId").notNull(),
+  tradeId: integer("tradeId"),
+  symbol: text("symbol").notNull(),
+  /** 'long' | 'short' */
+  direction: text("direction").notNull(),
+  confluenceScore: integer("confluenceScore").notNull(),
+  session: text("session"),
+  timeframe: text("timeframe"),
+  bias: text("bias"),
+  /** JSON stored as text */
+  factorsJson: text("factorsJson", { mode: "json" }),
   summary: text("summary"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type TradeReasoningRow = typeof tradeReasonings.$inferSelect;
@@ -157,25 +132,19 @@ export type InsertTradeReasoningRow = typeof tradeReasonings.$inferInsert;
 /**
  * Trade post-mortems — persists the bot's analysis of what happened after a trade closed.
  */
-export const tradePostMortems = mysqlTable("trade_post_mortems", {
-  id: int("id").autoincrement().primaryKey(),
-  /** Paper trading position ID (string) */
-  positionId: varchar("positionId", { length: 64 }).notNull(),
-  /** Trade ID in the trades table (if logged to journal) */
-  tradeId: int("tradeId"),
-  symbol: varchar("symbol", { length: 32 }).notNull(),
-  exitReason: varchar("exitReason", { length: 64 }).notNull(),
-  /** What worked in this trade */
+export const tradePostMortems = sqliteTable("trade_post_mortems", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  positionId: text("positionId").notNull(),
+  tradeId: integer("tradeId"),
+  symbol: text("symbol").notNull(),
+  exitReason: text("exitReason").notNull(),
   whatWorked: text("whatWorked"),
-  /** What failed in this trade */
   whatFailed: text("whatFailed"),
-  /** Key lesson learned */
   lessonLearned: text("lessonLearned"),
-  exitPrice: decimal("exitPrice", { precision: 18, scale: 8 }),
-  pnl: decimal("pnl", { precision: 18, scale: 2 }),
-  /** Full post-mortem JSON for additional data */
-  detailJson: json("detailJson"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  exitPrice: text("exitPrice"),
+  pnl: text("pnl"),
+  detailJson: text("detailJson", { mode: "json" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type TradePostMortemRow = typeof tradePostMortems.$inferSelect;
@@ -183,101 +152,97 @@ export type InsertTradePostMortemRow = typeof tradePostMortems.$inferInsert;
 
 /**
  * User settings — persists risk management and preference settings per user.
- * Single row per user (upsert pattern).
  */
-export const userSettings = mysqlTable("user_settings", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  /** Risk management settings JSON */
-  riskSettingsJson: json("riskSettingsJson"),
-  /** UI preferences JSON */
-  preferencesJson: json("preferencesJson"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const userSettings = sqliteTable("user_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  riskSettingsJson: text("riskSettingsJson", { mode: "json" }),
+  preferencesJson: text("preferencesJson", { mode: "json" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type UserSettingsRow = typeof userSettings.$inferSelect;
 export type InsertUserSettingsRow = typeof userSettings.$inferInsert;
 
 /**
- * Paper trading account state — persists balance, counters, and engine state so it survives restarts.
- * Single row per user (upsert pattern).
+ * Paper trading account state — persists balance, counters, and engine state.
  */
-export const paperAccounts = mysqlTable("paper_accounts", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  balance: decimal("balance", { precision: 18, scale: 2 }).notNull(),
-  peakBalance: decimal("peakBalance", { precision: 18, scale: 2 }).notNull(),
-  isRunning: boolean("isRunning").default(false).notNull(),
-  isPaused: boolean("isPaused").default(false).notNull(),
-  startedAt: timestamp("startedAt"),
-  /** Counters */
-  scanCount: int("scanCount").default(0).notNull(),
-  signalCount: int("signalCount").default(0).notNull(),
-  rejectedCount: int("rejectedCount").default(0).notNull(),
-  dailyPnlBase: decimal("dailyPnlBase", { precision: 18, scale: 2 }).notNull(),
-  dailyPnlDate: varchar("dailyPnlDate", { length: 10 }).default("").notNull(),
-  /** Execution mode: paper or live */
-  executionMode: mysqlEnum("executionMode", ["paper", "live"]).default("paper").notNull(),
-  /** Kill switch — halts all trading immediately */
-  killSwitchActive: boolean("killSwitchActive").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const paperAccounts = sqliteTable("paper_accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  /** Stored as text to preserve decimal precision */
+  balance: text("balance").notNull(),
+  peakBalance: text("peakBalance").notNull(),
+  isRunning: integer("isRunning", { mode: "boolean" }).default(false).notNull(),
+  isPaused: integer("isPaused", { mode: "boolean" }).default(false).notNull(),
+  startedAt: integer("startedAt", { mode: "timestamp" }),
+  scanCount: integer("scanCount").default(0).notNull(),
+  signalCount: integer("signalCount").default(0).notNull(),
+  rejectedCount: integer("rejectedCount").default(0).notNull(),
+  dailyPnlBase: text("dailyPnlBase").notNull(),
+  dailyPnlDate: text("dailyPnlDate").default("").notNull(),
+  /** 'paper' | 'live' */
+  executionMode: text("executionMode").default("paper").notNull(),
+  killSwitchActive: integer("killSwitchActive", { mode: "boolean" }).default(false).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type PaperAccountRow = typeof paperAccounts.$inferSelect;
 export type InsertPaperAccountRow = typeof paperAccounts.$inferInsert;
 
 /**
- * Paper trading positions — persists open positions so they survive restarts.
+ * Paper trading positions — persists open positions and pending orders.
  */
-export const paperPositions = mysqlTable("paper_positions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  positionId: varchar("positionId", { length: 32 }).notNull(),
-  symbol: varchar("symbol", { length: 32 }).notNull(),
-  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
-  size: decimal("size", { precision: 18, scale: 8 }).notNull(),
-  entryPrice: decimal("entryPrice", { precision: 18, scale: 8 }).notNull(),
-  currentPrice: decimal("currentPrice", { precision: 18, scale: 8 }).notNull(),
-  stopLoss: decimal("stopLoss", { precision: 18, scale: 8 }),
-  takeProfit: decimal("takeProfit", { precision: 18, scale: 8 }),
-  openTime: varchar("openTime", { length: 64 }).notNull(),
+export const paperPositions = sqliteTable("paper_positions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  positionId: text("positionId").notNull(),
+  symbol: text("symbol").notNull(),
+  /** 'long' | 'short' */
+  direction: text("direction").notNull(),
+  size: text("size").notNull(),
+  entryPrice: text("entryPrice").notNull(),
+  currentPrice: text("currentPrice").notNull(),
+  stopLoss: text("stopLoss"),
+  takeProfit: text("takeProfit"),
+  openTime: text("openTime").notNull(),
   signalReason: text("signalReason"),
-  signalScore: decimal("signalScore", { precision: 5, scale: 1 }).default("0").notNull(),
-  orderId: varchar("orderId", { length: 32 }).notNull(),
-  /** 'open' or 'pending' */
-  status: mysqlEnum("positionStatus", ["open", "pending"]).default("open").notNull(),
-  /** For pending orders */
-  triggerPrice: decimal("triggerPrice", { precision: 18, scale: 8 }),
-  orderType: varchar("orderType", { length: 16 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  signalScore: text("signalScore").default("0").notNull(),
+  orderId: text("orderId").notNull(),
+  /** 'open' | 'pending' */
+  status: text("positionStatus").default("open").notNull(),
+  triggerPrice: text("triggerPrice"),
+  orderType: text("orderType"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type PaperPositionRow = typeof paperPositions.$inferSelect;
 export type InsertPaperPositionRow = typeof paperPositions.$inferInsert;
 
 /**
- * Paper trade history — persists closed paper trades so they survive restarts.
+ * Paper trade history — persists closed paper trades.
  */
-export const paperTradeHistory = mysqlTable("paper_trade_history", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  positionId: varchar("positionId", { length: 32 }).notNull(),
-  symbol: varchar("symbol", { length: 32 }).notNull(),
-  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
-  size: decimal("size", { precision: 18, scale: 8 }).notNull(),
-  entryPrice: decimal("entryPrice", { precision: 18, scale: 8 }).notNull(),
-  exitPrice: decimal("exitPrice", { precision: 18, scale: 8 }).notNull(),
-  pnl: decimal("pnl", { precision: 18, scale: 2 }).notNull(),
-  pnlPips: decimal("pnlPips", { precision: 12, scale: 2 }).notNull(),
-  openTime: varchar("openTime", { length: 64 }).notNull(),
-  closedAt: varchar("closedAt", { length: 64 }).notNull(),
-  closeReason: varchar("closeReason", { length: 32 }).notNull(),
+export const paperTradeHistory = sqliteTable("paper_trade_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  positionId: text("positionId").notNull(),
+  symbol: text("symbol").notNull(),
+  /** 'long' | 'short' */
+  direction: text("direction").notNull(),
+  size: text("size").notNull(),
+  entryPrice: text("entryPrice").notNull(),
+  exitPrice: text("exitPrice").notNull(),
+  pnl: text("pnl").notNull(),
+  pnlPips: text("pnlPips").notNull(),
+  openTime: text("openTime").notNull(),
+  closedAt: text("closedAt").notNull(),
+  closeReason: text("closeReason").notNull(),
   signalReason: text("signalReason"),
-  signalScore: decimal("signalScore", { precision: 5, scale: 1 }).default("0").notNull(),
-  orderId: varchar("orderId", { length: 32 }).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  signalScore: text("signalScore").default("0").notNull(),
+  orderId: text("orderId").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 export type PaperTradeHistoryRow = typeof paperTradeHistory.$inferSelect;

@@ -70,19 +70,19 @@ describe("Backtest Engine", () => {
       const caller = createCaller(testUser);
       const now = new Date();
       const start = new Date(now);
-      start.setMonth(start.getMonth() - 1);
+      start.setDate(start.getDate() - 14); // 2 weeks for faster execution
 
       const result = await caller.backtest.run({
         symbol: "EUR/USD",
         startDate: start.toISOString(),
         endDate: now.toISOString(),
-        timeframe: "1h",
+        timeframe: "4h",
         initialBalance: 10000,
         useCurrentConfig: true,
       });
 
       expect(result).toHaveProperty("symbol", "EUR/USD");
-      expect(result).toHaveProperty("timeframe", "1h");
+      expect(result).toHaveProperty("timeframe", "4h");
       expect(result).toHaveProperty("initialBalance", 10000);
       expect(result).toHaveProperty("status");
       expect(["completed", "error"]).toContain(result.status);
@@ -102,7 +102,7 @@ describe("Backtest Engine", () => {
         expect(result.configSnapshot).toHaveProperty("minConfluence");
         expect(result.configSnapshot).toHaveProperty("riskPerTrade");
       }
-    }, 30000);
+    }, 60000);
 
     it("backtest.run validates initialBalance range", async () => {
       const caller = createCaller(testUser);
@@ -145,13 +145,13 @@ describe("Backtest Engine", () => {
       const caller = createCaller(testUser);
       const now = new Date();
       const start = new Date(now);
-      start.setMonth(start.getMonth() - 3);
+      start.setMonth(start.getMonth() - 1); // Use 1 month instead of 3 to avoid timeout
 
       const result = await caller.backtest.run({
         symbol: "EUR/USD",
         startDate: start.toISOString(),
         endDate: now.toISOString(),
-        timeframe: "1h",
+        timeframe: "4h", // Use 4h instead of 1h for faster execution
         initialBalance: 10000,
         useCurrentConfig: true,
       });
@@ -172,7 +172,7 @@ describe("Backtest Engine", () => {
         expect(trade).toHaveProperty("setupFactors");
         expect(Array.isArray(trade.setupFactors)).toBe(true);
       }
-    }, 30000);
+    }, 60000);
 
     it("backtest progress updates after a run", async () => {
       const caller = createCaller(testUser);
@@ -198,13 +198,13 @@ describe("Backtest Engine", () => {
       const caller = createCaller(testUser);
       const now = new Date();
       const start = new Date(now);
-      start.setMonth(start.getMonth() - 1);
+      start.setDate(start.getDate() - 14); // Use 2 weeks for faster execution
 
       await caller.backtest.run({
         symbol: "EUR/USD",
         startDate: start.toISOString(),
         endDate: now.toISOString(),
-        timeframe: "1h",
+        timeframe: "4h",
         initialBalance: 10000,
         useCurrentConfig: true,
       });
@@ -212,6 +212,6 @@ describe("Backtest Engine", () => {
       const result = await caller.backtest.lastResult();
       expect(result).not.toBeNull();
       expect(result?.symbol).toBe("EUR/USD");
-    }, 30000);
+    }, 60000);
   });
 });

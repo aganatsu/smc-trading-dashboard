@@ -1,22 +1,247 @@
 import { eq, desc, and, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection, botConfigs, InsertBotConfigRow, tradeReasonings, InsertTradeReasoningRow, tradePostMortems, InsertTradePostMortemRow, userSettings, InsertUserSettingsRow, paperAccounts, InsertPaperAccountRow, paperPositions, InsertPaperPositionRow, paperTradeHistory, InsertPaperTradeHistoryRow } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import Database from "better-sqlite3";
+import path from "path";
+import fs from "fs";
+import {
+  InsertUser, users,
+  trades, InsertTrade, Trade,
+  brokerConnections, InsertBrokerConnection,
+  botConfigs, InsertBotConfigRow,
+  tradeReasonings, InsertTradeReasoningRow,
+  tradePostMortems, InsertTradePostMortemRow,
+  userSettings, InsertUserSettingsRow,
+  paperAccounts, InsertPaperAccountRow,
+  paperPositions, InsertPaperPositionRow,
+  paperTradeHistory, InsertPaperTradeHistoryRow,
+} from "../drizzle/schema";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+let _db: BetterSQLite3Database | null = null;
+let _sqlite: Database.Database | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+/**
+ * Get or create the SQLite database instance.
+ * Database file lives in ./data/smc-trading.db by default,
+ * or wherever DATABASE_PATH env points to.
+ */
+export async function getDb(): Promise<BetterSQLite3Database | null> {
+  if (_db) return _db;
+
+  try {
+    const dbPath = process.env.SQLITE_DB_PATH || process.env.DATABASE_PATH || path.join(process.cwd(), "data", "smc-trading.db");
+
+    // Ensure the directory exists
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
+
+    _sqlite = new Database(dbPath);
+    // Enable WAL mode for better concurrent read performance
+    _sqlite.pragma("journal_mode = WAL");
+    // Enable foreign keys
+    _sqlite.pragma("foreign_keys = ON");
+
+    _db = drizzle(_sqlite);
+    return _db;
+  } catch (error) {
+    console.warn("[Database] Failed to connect:", error);
+    _db = null;
+    return null;
   }
-  return _db;
 }
+
+/**
+ * Get the raw better-sqlite3 instance (for running raw SQL like CREATE TABLE).
+ */
+export function getRawDb(): Database.Database | null {
+  return _sqlite;
+}
+
+/**
+ * Initialize the database schema by running CREATE TABLE IF NOT EXISTS.
+ * This replaces drizzle-kit push for the standalone Electron app.
+ */
+export async function initializeSchema(): Promise<void> {
+  const raw = getRawDb();
+  if (!raw) {
+    // Ensure DB is initialized first
+    await getDb();
+    const rawAfter = getRawDb();
+    if (!rawAfter) throw new Error("Cannot initialize schema: database not available");
+    return initializeSchemaWithRaw(rawAfter);
+  }
+  return initializeSchemaWithRaw(raw);
+}
+
+function initializeSchemaWithRaw(raw: Database.Database): void {
+  raw.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      openId TEXT NOT NULL UNIQUE,
+      name TEXT,
+      email TEXT,
+      loginMethod TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      lastSignedIn INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      symbol TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      entryPrice TEXT NOT NULL,
+      exitPrice TEXT,
+      stopLoss TEXT,
+      takeProfit TEXT,
+      positionSize TEXT,
+      riskReward TEXT,
+      riskPercent TEXT,
+      pnlPips TEXT,
+      pnlAmount TEXT,
+      timeframe TEXT,
+      followedStrategy INTEGER,
+      setupType TEXT,
+      notes TEXT,
+      deviations TEXT,
+      improvements TEXT,
+      entryTime INTEGER NOT NULL,
+      exitTime INTEGER,
+      screenshotUrl TEXT,
+      confluenceScore INTEGER,
+      reasoningJson TEXT,
+      postMortemJson TEXT,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS broker_connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      brokerType TEXT NOT NULL,
+      displayName TEXT NOT NULL,
+      apiKey TEXT NOT NULL,
+      accountId TEXT NOT NULL,
+      isLive INTEGER NOT NULL DEFAULT 0,
+      isActive INTEGER NOT NULL DEFAULT 1,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS bot_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      configJson TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trade_reasonings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      positionId TEXT NOT NULL,
+      tradeId INTEGER,
+      symbol TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      confluenceScore INTEGER NOT NULL,
+      session TEXT,
+      timeframe TEXT,
+      bias TEXT,
+      factorsJson TEXT,
+      summary TEXT,
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trade_post_mortems (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      positionId TEXT NOT NULL,
+      tradeId INTEGER,
+      symbol TEXT NOT NULL,
+      exitReason TEXT NOT NULL,
+      whatWorked TEXT,
+      whatFailed TEXT,
+      lessonLearned TEXT,
+      exitPrice TEXT,
+      pnl TEXT,
+      detailJson TEXT,
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      riskSettingsJson TEXT,
+      preferencesJson TEXT,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS paper_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      balance TEXT NOT NULL,
+      peakBalance TEXT NOT NULL,
+      isRunning INTEGER NOT NULL DEFAULT 0,
+      isPaused INTEGER NOT NULL DEFAULT 0,
+      startedAt INTEGER,
+      scanCount INTEGER NOT NULL DEFAULT 0,
+      signalCount INTEGER NOT NULL DEFAULT 0,
+      rejectedCount INTEGER NOT NULL DEFAULT 0,
+      dailyPnlBase TEXT NOT NULL,
+      dailyPnlDate TEXT NOT NULL DEFAULT '',
+      executionMode TEXT NOT NULL DEFAULT 'paper',
+      killSwitchActive INTEGER NOT NULL DEFAULT 0,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS paper_positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      positionId TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      size TEXT NOT NULL,
+      entryPrice TEXT NOT NULL,
+      currentPrice TEXT NOT NULL,
+      stopLoss TEXT,
+      takeProfit TEXT,
+      openTime TEXT NOT NULL,
+      signalReason TEXT,
+      signalScore TEXT NOT NULL DEFAULT '0',
+      orderId TEXT NOT NULL,
+      positionStatus TEXT NOT NULL DEFAULT 'open',
+      triggerPrice TEXT,
+      orderType TEXT,
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS paper_trade_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      positionId TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      size TEXT NOT NULL,
+      entryPrice TEXT NOT NULL,
+      exitPrice TEXT NOT NULL,
+      pnl TEXT NOT NULL,
+      pnlPips TEXT NOT NULL,
+      openTime TEXT NOT NULL,
+      closedAt TEXT NOT NULL,
+      closeReason TEXT NOT NULL,
+      signalReason TEXT,
+      signalScore TEXT NOT NULL DEFAULT '0',
+      orderId TEXT NOT NULL,
+      createdAt INTEGER NOT NULL
+    );
+  `);
+}
+
+// ── User Queries ──
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
@@ -30,47 +255,50 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
+    const existing = await getUserByOpenId(user.openId);
+    if (existing) {
+      const updateSet: Record<string, unknown> = {};
+      const textFields = ["name", "email", "loginMethod"] as const;
+      type TextField = (typeof textFields)[number];
 
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
+      const assignNullable = (field: TextField) => {
+        const value = user[field];
+        if (value === undefined) return;
+        const normalized = value ?? null;
+        updateSet[field] = normalized;
+      };
 
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
+      textFields.forEach(assignNullable);
 
-    textFields.forEach(assignNullable);
+      if (user.lastSignedIn !== undefined) {
+        updateSet.lastSignedIn = user.lastSignedIn;
+      }
+      if (user.role !== undefined) {
+        updateSet.role = user.role;
+      }
 
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
+      if (Object.keys(updateSet).length === 0) {
+        updateSet.lastSignedIn = new Date();
+      }
+
+      updateSet.updatedAt = new Date();
+
+      await db
+        .update(users)
+        .set(updateSet)
+        .where(eq(users.openId, user.openId));
+    } else {
+      const values: InsertUser = {
+        openId: user.openId,
+        name: user.name,
+        email: user.email,
+        loginMethod: user.loginMethod,
+        role: user.role ?? (user.openId === process.env.OWNER_OPEN_ID ? 'admin' : 'user'),
+        lastSignedIn: user.lastSignedIn ?? new Date(),
+      };
+
+      await db.insert(users).values(values);
     }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -85,7 +313,6 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -95,8 +322,8 @@ export async function createTrade(trade: InsertTrade): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(trades).values(trade);
-  return result[0].insertId;
+  const result = db.insert(trades).values(trade).returning({ id: trades.id }).get();
+  return result.id;
 }
 
 export async function getTradesByUser(userId: number, limit = 50, offset = 0) {
@@ -131,7 +358,7 @@ export async function updateTrade(tradeId: number, userId: number, data: Partial
 
   await db
     .update(trades)
-    .set(data)
+    .set({ ...data, updatedAt: new Date() })
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
 }
 
@@ -185,8 +412,8 @@ export async function createBrokerConnection(conn: InsertBrokerConnection): Prom
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(brokerConnections).values(conn);
-  return result[0].insertId;
+  const result = db.insert(brokerConnections).values(conn).returning({ id: brokerConnections.id }).get();
+  return result.id;
 }
 
 export async function getBrokerConnectionsByUser(userId: number) {
@@ -219,7 +446,7 @@ export async function updateBrokerConnection(connId: number, userId: number, dat
 
   await db
     .update(brokerConnections)
-    .set(data)
+    .set({ ...data, updatedAt: new Date() })
     .where(and(eq(brokerConnections.id, connId), eq(brokerConnections.userId, userId)));
 }
 
@@ -273,7 +500,7 @@ export async function upsertBotConfig(userId: number, configJson: unknown) {
   if (existing) {
     await db
       .update(botConfigs)
-      .set({ configJson })
+      .set({ configJson, updatedAt: new Date() })
       .where(eq(botConfigs.userId, userId));
   } else {
     await db.insert(botConfigs).values({ userId, configJson });
@@ -282,12 +509,12 @@ export async function upsertBotConfig(userId: number, configJson: unknown) {
 
 // ── Trade Reasoning Queries ──
 
-export async function insertTradeReasoning(data: InsertTradeReasoningRow) {
+export async function insertTradeReasoning(data: InsertTradeReasoningRow): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(tradeReasonings).values(data);
-  return result[0].insertId;
+  const result = db.insert(tradeReasonings).values(data).returning({ id: tradeReasonings.id }).get();
+  return result.id;
 }
 
 export async function getTradeReasoningByPositionId(positionId: string) {
@@ -329,12 +556,12 @@ export async function getRecentTradeReasonings(limit = 50) {
 
 // ── Trade Post-Mortem Queries ──
 
-export async function insertTradePostMortem(data: InsertTradePostMortemRow) {
+export async function insertTradePostMortem(data: InsertTradePostMortemRow): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(tradePostMortems).values(data);
-  return result[0].insertId;
+  const result = db.insert(tradePostMortems).values(data).returning({ id: tradePostMortems.id }).get();
+  return result.id;
 }
 
 export async function getTradePostMortemByPositionId(positionId: string) {
@@ -398,6 +625,7 @@ export async function upsertUserSettings(userId: number, data: { riskSettingsJso
     const updateSet: Record<string, unknown> = {};
     if (data.riskSettingsJson !== undefined) updateSet.riskSettingsJson = data.riskSettingsJson;
     if (data.preferencesJson !== undefined) updateSet.preferencesJson = data.preferencesJson;
+    updateSet.updatedAt = new Date();
     await db
       .update(userSettings)
       .set(updateSet)
@@ -419,7 +647,7 @@ export async function updateTradeReasoningJson(tradeId: number, userId: number, 
 
   await db
     .update(trades)
-    .set({ reasoningJson })
+    .set({ reasoningJson, updatedAt: new Date() })
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
 }
 
@@ -429,7 +657,7 @@ export async function updateTradePostMortemJson(tradeId: number, userId: number,
 
   await db
     .update(trades)
-    .set({ postMortemJson })
+    .set({ postMortemJson, updatedAt: new Date() })
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
 }
 
@@ -456,7 +684,7 @@ export async function upsertPaperAccount(userId: number, data: Partial<Omit<Inse
   if (existing) {
     await db
       .update(paperAccounts)
-      .set(data)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(paperAccounts.userId, userId));
   } else {
     await db.insert(paperAccounts).values({

@@ -153,7 +153,7 @@ async function fetchLiveCalendar(): Promise<EconomicEvent[]> {
       const country = CURRENCY_TO_COUNTRY[currency] || currency.substring(0, 2);
       const impact = mapImpact(raw.impact);
       const category = detectCategory(raw.title);
-      const affectedPairs = CURRENCY_PAIRS[currency] || [];
+      const affectedPairs = CURRENCY_PAIRS[currency] || CURRENCY_PAIRS[currency.toUpperCase()] || [];
 
       return {
         id: `live_${idx}_${raw.date}`,

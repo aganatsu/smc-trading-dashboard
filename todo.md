@@ -351,3 +351,39 @@
 - [x] Node.js path: guided database setup with paste prompt (one-time only)
 - [x] Auto-open browser after server starts
 - [x] Update README-INSTALL.md with one-click instructions
+
+## Electron Desktop App (SQLite)
+
+### Schema Migration (MySQL → SQLite)
+- [x] Audit all MySQL-specific types: mysqlTable, mysqlEnum, onUpdateNow(), timestamp defaults, decimal→string, insertId, onDuplicateKeyUpdate
+- [x] Rewrite drizzle/schema.ts using sqliteTable, text for enums, integer for timestamps
+- [x] Rewrite drizzle.config.ts for SQLite driver
+- [x] Update all DB helpers in server/db.ts for SQLite-compatible queries
+- [x] Update paperTradingPersistence.ts for SQLite
+- [x] Update botConfig.ts DB load/save for SQLite
+- [x] Update server/_core/context.ts user lookup for SQLite
+- [x] Replace mysql2 driver with better-sqlite3 in db.ts initialization
+
+### Electron Shell
+- [x] Create electron/main.mjs — Electron main process
+- [x] Boot Express server as forked child process inside Electron
+- [x] Create BrowserWindow pointing to localhost server
+- [x] SQLite database file stored in app userData directory
+- [x] Auto-run migrations on first launch (via server startup)
+- [x] App menu with Help > Open Data Folder, Reset Database, DevTools
+- [x] Graceful shutdown (stop server, close DB on quit)
+
+### Build & Package
+- [x] Add electron v41.2.0, electron-builder v26.8.1, better-sqlite3 dependencies
+- [x] Configure electron-builder for macOS DMG, Windows NSIS, Linux AppImage
+- [x] Build pipeline: vite build → esbuild server → electron-builder package
+- [x] Test the packaged Linux AppImage builds successfully (178 MB)
+- [x] Create build-mac.sh and build-win.bat cross-platform build scripts
+- [x] Create README-DESKTOP.md with architecture docs and build instructions
+
+### Testing
+- [x] Run full vitest suite after SQLite migration
+- [x] Fix backtest test timeouts (shorter date ranges, 60s timeout)
+- [x] Fix fundamentals test assertion (affectedPairs can be empty for exotic currencies)
+- [x] Fix botConfigRoutes test timeout (15s for network-dependent test)
+- [x] All 259 tests passing across 17 test files

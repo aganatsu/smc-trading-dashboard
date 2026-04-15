@@ -153,6 +153,6 @@ describe("Bot Config tRPC Routes", () => {
         size: 0.01,
       });
       expect(result.success).toBe(true);
-    });
+    }, 15000);
   });
 });
