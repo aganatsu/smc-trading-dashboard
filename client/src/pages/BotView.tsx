@@ -46,7 +46,7 @@ const SYMBOLS = [
 
 export default function BotView() {
   const { user, isAuthenticated } = useAuth();
-  const status = trpc.paper.status.useQuery(undefined, { refetchInterval: 3000 });
+  const status = trpc.paper.status.useQuery(undefined, { refetchInterval: 15000, staleTime: 10000 });
   const startMut = trpc.paper.start.useMutation({ onSuccess: () => status.refetch() });
   const pauseMut = trpc.paper.pause.useMutation({ onSuccess: () => status.refetch() });
   const stopMut = trpc.paper.stop.useMutation({ onSuccess: () => status.refetch() });
@@ -56,8 +56,8 @@ export default function BotView() {
   const cancelPendingMut = trpc.paper.cancelPendingOrder.useMutation({ onSuccess: () => status.refetch() });
 
   // Autonomous engine state + controls
-  const engineState = trpc.engine.state.useQuery(undefined, { refetchInterval: 5000 });
-  const scanResults = trpc.engine.scanResults.useQuery(undefined, { refetchInterval: 10000 });
+  const engineState = trpc.engine.state.useQuery(undefined, { refetchInterval: 15000, staleTime: 10000 });
+  const scanResults = trpc.engine.scanResults.useQuery(undefined, { refetchInterval: 30000, staleTime: 15000 });
   const engineStartMut = trpc.engine.start.useMutation({ onSuccess: () => { engineState.refetch(); status.refetch(); } });
   const engineStopMut = trpc.engine.stop.useMutation({ onSuccess: () => { engineState.refetch(); status.refetch(); } });
   const engineAutoTradeMut = trpc.engine.setAutoTrading.useMutation({ onSuccess: () => engineState.refetch() });

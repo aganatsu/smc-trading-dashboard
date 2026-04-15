@@ -28,9 +28,18 @@ interface WebSocketState {
   clientCount?: number;
 }
 
-const RECONNECT_BASE_DELAY = 1000;
-const RECONNECT_MAX_DELAY = 30000;
+const RECONNECT_BASE_DELAY = 2000;
+const RECONNECT_MAX_DELAY = 60000;
 const PING_INTERVAL = 25000;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+/** Detect if running through a proxy that doesn't support WebSocket well */
+function isProxiedEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  // Manus preview proxy or similar environments
+  return host.includes('.manus.computer') || host.includes('.manus.space');
+}
 
 export function useWebSocketPrices(symbols: string[]): WebSocketState {
   const [prices, setPrices] = useState<PriceMap>({});
@@ -120,16 +129,19 @@ export function useWebSocketPrices(symbols: string[]): WebSocketState {
         pingTimer.current = null;
       }
 
-      // Auto-reconnect with exponential backoff
-      if (event.code !== 1000) { // 1000 = normal close
+      // Auto-reconnect with exponential backoff (limited attempts)
+      if (event.code !== 1000 && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
         setReconnecting(true);
         const delay = Math.min(
           RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current),
           RECONNECT_MAX_DELAY
         );
         reconnectAttempts.current++;
-        console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current})`);
+        console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
         reconnectTimer.current = setTimeout(connect, delay);
+      } else if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        console.log('[WS] Max reconnect attempts reached, falling back to REST polling');
+        setReconnecting(false);
       }
     };
 
@@ -179,6 +191,12 @@ function globalConnect() {
     return;
   }
 
+  // Skip WebSocket in proxied environments where WS is unreliable
+  if (isProxiedEnvironment() && globalReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.log('[WS] Skipping WebSocket in proxied environment after max retries');
+    return;
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/ws/prices`;
   const ws = new WebSocket(url);
@@ -217,11 +235,14 @@ function globalConnect() {
     globalConnected = false;
     if (globalPingTimer) { clearInterval(globalPingTimer); globalPingTimer = null; }
 
-    if (event.code !== 1000) {
+    if (event.code !== 1000 && globalReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       globalReconnecting = true;
       const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, globalReconnectAttempts), RECONNECT_MAX_DELAY);
       globalReconnectAttempts++;
       globalReconnectTimer = setTimeout(globalConnect, delay);
+    } else if (globalReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      globalReconnecting = false;
+      console.log('[WS] Max reconnect attempts reached globally, stopping WS reconnects');
     }
     notifyListeners();
   };

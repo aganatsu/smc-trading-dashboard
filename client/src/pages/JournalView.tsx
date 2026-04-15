@@ -26,12 +26,12 @@ export default function JournalView() {
 
   const trades = trpc.trades.list.useQuery(
     { limit: 100, offset: 0 },
-    { refetchInterval: 15000 }
+    { refetchInterval: 60000, staleTime: 30000 }
   );
 
-  const stats = trpc.trades.stats.useQuery(undefined, { refetchInterval: 30000 });
+  const stats = trpc.trades.stats.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
 
-  const equityCurve = trpc.trades.equityCurve.useQuery(undefined, { refetchInterval: 30000 });
+  const equityCurve = trpc.trades.equityCurve.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
 
   const filteredTrades = useMemo(() => {
     if (!trades.data) return [];

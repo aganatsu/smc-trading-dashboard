@@ -54,9 +54,9 @@ function getTimeRangeMs(range: TimeRange): number {
 
 export default function DashboardView() {
   const { isAuthenticated } = useAuth();
-  const paperStatus = trpc.paper.status.useQuery(undefined, { refetchInterval: 5000 });
-  const stats = trpc.trades.stats.useQuery(undefined, { refetchInterval: 30000 });
-  const equityCurve = trpc.trades.equityCurve.useQuery(undefined, { refetchInterval: 30000 });
+  const paperStatus = trpc.paper.status.useQuery(undefined, { refetchInterval: 15000, staleTime: 10000 });
+  const stats = trpc.trades.stats.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
+  const equityCurve = trpc.trades.equityCurve.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
 
   const [timeRange, setTimeRange] = useState<TimeRange>("3M");
 

@@ -128,14 +128,16 @@ export default function AppShell() {
     return () => window.removeEventListener('keydown', handler);
   }, [switchView, filterOpen]);
 
-  // Periodic connection check
+  // Periodic connection check — use longer interval and derive status from WS
+  useEffect(() => {
+    setConnectionStatus(wsConnected ? 'connected' : 'disconnected');
+  }, [wsConnected]);
+
+  // Update clock display periodically (no network request)
   useEffect(() => {
     const interval = setInterval(() => {
       setLastUpdate(new Date());
-      fetch('/api/trpc/market.quote?input=' + encodeURIComponent(JSON.stringify({ json: { symbol: 'EUR/USD' } })))
-        .then(r => setConnectionStatus(r.ok ? 'connected' : 'disconnected'))
-        .catch(() => setConnectionStatus('disconnected'));
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 

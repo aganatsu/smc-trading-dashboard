@@ -394,3 +394,4 @@
 - [x] Update install.sh for SQLite standalone mode (no MySQL/DATABASE_URL needed)
 - [x] Server auto-creates 'local-owner' user when OWNER_OPEN_ID is not set
 - [x] context.ts detects standalone mode when OAUTH_SERVER_URL is missing
+- [x] Fix flashing/flickering issue in Manus preview app (reduced polling intervals, capped WS reconnects, removed aggressive health check)
