@@ -157,13 +157,13 @@
 ## Phase 16: Restore Missing Features & Autonomous Bot
 
 ### Missing Features to Restore
-- [ ] Fundamentals panel — economic calendar, news impact, high-impact events for traded pairs
+- [x] Fundamentals panel — economic calendar, news impact, high-impact events for traded pairs (built-in schedule, 14 tests)
 - [x] Correlations panel — currency pair correlation matrix, positive/negative correlation alerts
 - [x] Session Map — London/NY/Asian/Sydney session times with price range boxes on chart
 - [x] Heat Map — currency strength meter showing which currencies are strong/weak
 - [x] PD/PW (Previous Day/Previous Week) — automatic PD high/low/open/close and PW high/low levels
 - [x] Judas Swing detection — identify false breakouts at session opens (ICT concept)
-- [ ] Backtest engine — test strategy against historical data with results summary
+- [x] Backtest engine — test strategy against historical data with results summary
 
 ### Autonomous Bot Decision Engine
 - [x] Bot auto-scan loop: periodically analyze all enabled instruments using SMC analysis

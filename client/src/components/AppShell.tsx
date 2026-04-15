@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LayoutDashboard, LineChart, Bot, BookOpen, Settings,
-  Wifi, WifiOff, Clock, Activity, Search
+  Wifi, WifiOff, Clock, Activity, Search, FlaskConical
 } from 'lucide-react';
 
 // View imports
@@ -19,8 +19,9 @@ import BotView from '@/pages/BotView';
 import JournalView from '@/pages/JournalView';
 import SettingsView from '@/pages/SettingsView';
 import ICTAnalysis from '@/pages/ICTAnalysis';
+import BacktestView from '@/pages/BacktestView';
 
-export type ViewId = 'dashboard' | 'chart' | 'ict' | 'bot' | 'journal' | 'settings';
+export type ViewId = 'dashboard' | 'chart' | 'ict' | 'bot' | 'journal' | 'backtest' | 'settings';
 
 interface NavItem {
   id: ViewId;
@@ -35,7 +36,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'ict', icon: Activity, label: 'ICT', shortcut: '3' },
   { id: 'bot', icon: Bot, label: 'Bot', shortcut: '4' },
   { id: 'journal', icon: BookOpen, label: 'Journal', shortcut: '5' },
-  { id: 'settings', icon: Settings, label: 'Settings', shortcut: '6' },
+  { id: 'backtest', icon: FlaskConical, label: 'Backtest', shortcut: '6' },
+  { id: 'settings', icon: Settings, label: 'Settings', shortcut: '7' },
 ];
 
 // Instruments available for quick search/filter
@@ -255,6 +257,11 @@ export default function AppShell() {
           {mountedViews.has('journal') && (
             <div className="absolute inset-0 overflow-auto" style={{ display: activeView === 'journal' ? 'block' : 'none' }}>
               <JournalView />
+            </div>
+          )}
+          {mountedViews.has('backtest') && (
+            <div className="absolute inset-0 overflow-auto" style={{ display: activeView === 'backtest' ? 'block' : 'none' }}>
+              <BacktestView />
             </div>
           )}
           {mountedViews.has('settings') && (

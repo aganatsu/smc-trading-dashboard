@@ -10,7 +10,7 @@ import { trpc } from '@/lib/trpc';
 import {
   Clock, TrendingUp, TrendingDown, Zap, BarChart3, Grid3X3,
   ArrowUpDown, Activity, Gauge, Sun, Moon, Target, AlertTriangle,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, Calendar, Newspaper
 } from 'lucide-react';
 
 const SYMBOLS = [
@@ -21,7 +21,7 @@ const SYMBOLS = [
 export default function ICTAnalysis() {
   const [selectedSymbol, setSelectedSymbol] = useState('EUR/USD');
   const [expandedPanels, setExpandedPanels] = useState<Set<string>>(
-    new Set(['session', 'strength', 'correlations', 'pdpw', 'judas', 'premium'])
+    new Set(['session', 'strength', 'correlations', 'pdpw', 'judas', 'premium', 'fundamentals'])
   );
 
   // Listen for symbol changes from AppShell sidebar
@@ -572,9 +572,199 @@ export default function ICTAnalysis() {
               </div>
             ) : <EmptyState text="Premium/Discount data unavailable" />}
           </Panel>
+
+          {/* ═══ FUNDAMENTALS / ECONOMIC CALENDAR ═══ */}
+          <FundamentalsPanel
+            selectedSymbol={selectedSymbol}
+            expanded={expandedPanels.has('fundamentals')}
+            onToggle={() => togglePanel('fundamentals')}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Fundamentals Panel ─────────────────────────────────────────────
+function FundamentalsPanel({ selectedSymbol, expanded, onToggle }: {
+  selectedSymbol: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const fundamentals = trpc.fundamentals.data.useQuery(undefined, { refetchInterval: 300000 });
+  const pairEvents = trpc.fundamentals.eventsForPair.useQuery(
+    { pair: selectedSymbol },
+    { refetchInterval: 300000 }
+  );
+  const highImpact = trpc.fundamentals.highImpactCheck.useQuery(
+    { pair: selectedSymbol, withinMinutes: 60 },
+    { refetchInterval: 60000 }
+  );
+
+  const impactColor = (impact: string) => {
+    switch (impact) {
+      case 'high': return 'text-bearish bg-bearish/10 border-bearish/30';
+      case 'medium': return 'text-warning bg-warning/10 border-warning/30';
+      case 'low': return 'text-muted-foreground bg-muted/10 border-border';
+      default: return 'text-muted-foreground';
+    }
+  };
+
+  const impactDot = (impact: string) => {
+    switch (impact) {
+      case 'high': return 'bg-bearish';
+      case 'medium': return 'bg-warning';
+      case 'low': return 'bg-muted-foreground';
+      default: return 'bg-muted-foreground';
+    }
+  };
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  const countryFlag = (country: string) => {
+    const flags: Record<string, string> = {
+      US: '🇺🇸', EU: '🇪🇺', GB: '🇬🇧', JP: '🇯🇵', AU: '🇦🇺', CA: '🇨🇦', NZ: '🇳🇿', CH: '🇨🇭',
+    };
+    return flags[country] || country;
+  };
+
+  return (
+    <Panel
+      id="fundamentals"
+      title="Fundamentals / Economic Calendar"
+      icon={<Calendar className="w-4 h-4" />}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      {fundamentals.isLoading ? <LoadingState /> : fundamentals.data ? (
+        <div className="space-y-4">
+          {/* High impact alert */}
+          {highImpact.data?.hasEvent && highImpact.data.event && (
+            <div className="bg-bearish/10 border border-bearish/30 p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-bearish flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold font-mono text-bearish">HIGH IMPACT EVENT APPROACHING</div>
+                <div className="text-[10px] font-mono text-foreground mt-1">
+                  {highImpact.data.event.name} ({highImpact.data.event.currency}) at {formatTime(highImpact.data.event.scheduledTime)}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                  {highImpact.data.event.description}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Impact summary */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-bearish/10 border border-bearish/30 p-2.5 text-center">
+              <div className="text-lg font-bold font-mono text-bearish">{fundamentals.data.highImpactCount}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">High Impact</div>
+            </div>
+            <div className="bg-warning/10 border border-warning/30 p-2.5 text-center">
+              <div className="text-lg font-bold font-mono text-warning">{fundamentals.data.mediumImpactCount}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Medium Impact</div>
+            </div>
+            <div className="bg-muted/30 border border-border p-2.5 text-center">
+              <div className="text-lg font-bold font-mono text-muted-foreground">{fundamentals.data.lowImpactCount}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Low Impact</div>
+            </div>
+          </div>
+
+          {/* Currency exposure this week */}
+          {Object.keys(fundamentals.data.currencyExposure).length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">Currency Event Exposure (This Week)</div>
+              <div className="grid grid-cols-4 gap-1">
+                {Object.entries(fundamentals.data.currencyExposure)
+                  .sort(([, a], [, b]) => (b.high * 3 + b.medium * 2 + b.low) - (a.high * 3 + a.medium * 2 + a.low))
+                  .map(([currency, counts]) => (
+                    <div key={currency} className="bg-muted/20 border border-border p-2 text-center">
+                      <div className="text-xs font-bold font-mono text-foreground">{currency}</div>
+                      <div className="flex justify-center gap-1 mt-1">
+                        {counts.high > 0 && <span className="text-[9px] font-mono text-bearish">{counts.high}H</span>}
+                        {counts.medium > 0 && <span className="text-[9px] font-mono text-warning">{counts.medium}M</span>}
+                        {counts.low > 0 && <span className="text-[9px] font-mono text-muted-foreground">{counts.low}L</span>}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Events for selected pair */}
+          <div>
+            <div className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Events Affecting {selectedSymbol} (Next 7 Days)
+            </div>
+            {pairEvents.data && pairEvents.data.length > 0 ? (
+              <div className="space-y-1">
+                {pairEvents.data.slice(0, 15).map((event, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-muted/20 border border-border/50 px-3 py-2">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${impactDot(event.impact)}`} />
+                    <div className="text-[10px] font-mono text-muted-foreground w-10 flex-shrink-0">
+                      {countryFlag(event.country)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono font-bold text-foreground truncate">{event.name}</div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {formatDate(event.scheduledTime)} at {formatTime(event.scheduledTime)}
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${impactColor(event.impact)} uppercase`}>
+                      {event.impact}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs font-mono text-muted-foreground py-2">No events affecting {selectedSymbol} in the next 7 days</div>
+            )}
+          </div>
+
+          {/* Today's events */}
+          <div>
+            <div className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Today's Events ({fundamentals.data.todayEvents.length})
+            </div>
+            {fundamentals.data.todayEvents.length > 0 ? (
+              <div className="space-y-1">
+                {fundamentals.data.todayEvents.map((event, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-muted/20 border border-border/50 px-3 py-2">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${impactDot(event.impact)}`} />
+                    <div className="text-[10px] font-mono w-10 flex-shrink-0">{countryFlag(event.country)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono font-bold text-foreground truncate">{event.name}</div>
+                    </div>
+                    <div className="text-[10px] font-mono text-cyan flex-shrink-0">{formatTime(event.scheduledTime)}</div>
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${impactColor(event.impact)} uppercase`}>
+                      {event.impact}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs font-mono text-muted-foreground py-2">No economic events scheduled for today</div>
+            )}
+          </div>
+
+          {/* Explanation */}
+          <div className="text-[10px] font-mono text-muted-foreground bg-muted/20 p-2 border border-border/50">
+            <strong className="text-foreground">Fundamentals Calendar:</strong> Shows upcoming economic events that can cause
+            significant price volatility. <span className="text-bearish">High impact</span> events (NFP, CPI, central bank decisions)
+            often cause 50-200+ pip moves. The bot's news filter can automatically pause trading before these events.
+            Events are generated from known recurring schedules for major economies.
+          </div>
+        </div>
+      ) : <EmptyState text="Fundamentals data unavailable" />}
+    </Panel>
   );
 }
 

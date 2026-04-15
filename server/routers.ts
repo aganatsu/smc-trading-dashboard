@@ -56,6 +56,8 @@ import {
   triggerManualScan,
   generatePostMortem,
 } from "./botEngine";
+import { getFundamentalsData, getEventsForPair, hasUpcomingHighImpact } from "./fundamentals";
+import { runBacktest, getBacktestProgress, getLastBacktestResult } from "./backtest";
 
 export const appRouter = router({
   system: systemRouter,
@@ -116,6 +118,23 @@ export const appRouter = router({
       )
       .query(async ({ input }) => {
         return fetchQuoteFromYahoo(input.symbol);
+      }),
+  }),
+
+  // ─── Fundamentals & Economic Calendar ────────────────────────────
+  fundamentals: router({
+    data: publicProcedure.query(() => {
+      return getFundamentalsData();
+    }),
+    eventsForPair: publicProcedure
+      .input(z.object({ pair: z.string() }))
+      .query(({ input }) => {
+        return getEventsForPair(input.pair);
+      }),
+    highImpactCheck: publicProcedure
+      .input(z.object({ pair: z.string(), withinMinutes: z.number().optional().default(30) }))
+      .query(({ input }) => {
+        return hasUpcomingHighImpact(input.pair, input.withinMinutes);
       }),
   }),
 
@@ -738,6 +757,38 @@ export const appRouter = router({
 
     postMortems: publicProcedure.query(() => {
       return getPostMortems();
+    }),
+  }),
+
+  // ─── Backtest Engine ──────────────────────────────────────────────
+  backtest: router({
+    run: protectedProcedure
+      .input(z.object({
+        symbol: z.string(),
+        startDate: z.string(),
+        endDate: z.string(),
+        timeframe: z.string(),
+        initialBalance: z.number().min(100).max(10000000).default(10000),
+        useCurrentConfig: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await runBacktest({
+          symbol: input.symbol,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          timeframe: input.timeframe,
+          initialBalance: input.initialBalance,
+          useCurrentConfig: input.useCurrentConfig,
+        });
+        return result;
+      }),
+
+    progress: publicProcedure.query(() => {
+      return getBacktestProgress();
+    }),
+
+    lastResult: publicProcedure.query(() => {
+      return getLastBacktestResult();
     }),
   }),
 });
