@@ -1,6 +1,10 @@
 /**
  * Bot Configuration — All tunable parameters for the SMC trading bot
  * 
+ * Persistence: Config is stored in the `bot_configs` DB table.
+ * An in-memory cache is used for fast reads; writes go to both cache and DB.
+ * On first access, config is loaded from DB (if available) or falls back to defaults.
+ * 
  * Categories:
  * 1. Strategy Settings (SMC-specific setups, confluence, timeframes)
  * 2. Risk Management (position sizing, limits, protection)
@@ -11,6 +15,8 @@
  * 7. Notifications (trade/signal/error/daily summary alerts)
  * 8. Account Settings (starting balance, leverage, paper/live mode)
  */
+
+import { getBotConfig as dbGetBotConfig, upsertBotConfig as dbUpsertBotConfig } from "./db";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -326,9 +332,79 @@ export const DEFAULT_CONFIG: BotConfig = {
   },
 };
 
-// ─── State ──────────────────────────────────────────────────────────
+// ─── State (in-memory cache, synced to DB) ─────────────────────────
 
 let currentConfig: BotConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+let configLoaded = false;
+let currentUserId: number | null = null;
+
+// ─── DB Persistence ────────────────────────────────────────────────
+
+/**
+ * Load config from DB for a given user. Falls back to defaults if no DB row.
+ * Called once on first access or when userId changes.
+ */
+export async function loadConfigFromDb(userId: number): Promise<BotConfig> {
+  try {
+    const row = await dbGetBotConfig(userId);
+    if (row && row.configJson) {
+      // Deep merge DB config over defaults to handle new fields added after save
+      const saved = row.configJson as Partial<BotConfig>;
+      currentConfig = deepMergeConfig(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), saved);
+    } else {
+      currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    }
+  } catch (err) {
+    console.warn("[BotConfig] Failed to load from DB, using defaults:", err);
+    currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  }
+  configLoaded = true;
+  currentUserId = userId;
+  return getConfig();
+}
+
+/**
+ * Save current config to DB for the given user.
+ */
+async function saveConfigToDb(userId: number): Promise<void> {
+  try {
+    await dbUpsertBotConfig(userId, currentConfig);
+  } catch (err) {
+    console.error("[BotConfig] Failed to save to DB:", err);
+  }
+}
+
+function deepMergeConfig(base: BotConfig, partial: Partial<BotConfig>): BotConfig {
+  const result = { ...base };
+  if (partial.strategy) result.strategy = { ...base.strategy, ...partial.strategy };
+  if (partial.risk) result.risk = { ...base.risk, ...partial.risk };
+  if (partial.entry) result.entry = { ...base.entry, ...partial.entry };
+  if (partial.exit) result.exit = { ...base.exit, ...partial.exit };
+  if (partial.instruments) {
+    result.instruments = {
+      ...base.instruments,
+      ...partial.instruments,
+      allowedInstruments: {
+        ...base.instruments.allowedInstruments,
+        ...(partial.instruments.allowedInstruments || {}),
+      },
+    };
+  }
+  if (partial.sessions) {
+    result.sessions = {
+      ...base.sessions,
+      ...partial.sessions,
+      activeDays: {
+        ...base.sessions.activeDays,
+        ...(partial.sessions.activeDays || {}),
+      },
+    };
+  }
+  if (partial.notifications) result.notifications = { ...base.notifications, ...partial.notifications };
+  if (partial.protection) result.protection = { ...base.protection, ...partial.protection };
+  if (partial.account) result.account = { ...base.account, ...partial.account };
+  return result;
+}
 
 // ─── Public API ─────────────────────────────────────────────────────
 
@@ -336,54 +412,36 @@ export function getConfig(): BotConfig {
   return JSON.parse(JSON.stringify(currentConfig));
 }
 
-export function updateConfig(partial: Partial<BotConfig>): BotConfig {
-  // Deep merge each section
-  if (partial.strategy) {
-    currentConfig.strategy = { ...currentConfig.strategy, ...partial.strategy };
+export function isConfigLoaded(): boolean {
+  return configLoaded;
+}
+
+/**
+ * Update config and persist to DB. Requires userId for DB persistence.
+ */
+export async function updateConfig(partial: Partial<BotConfig>, userId?: number): Promise<BotConfig> {
+  currentConfig = deepMergeConfig(currentConfig, partial);
+
+  // Persist to DB if we have a userId
+  const uid = userId ?? currentUserId;
+  if (uid) {
+    await saveConfigToDb(uid);
   }
-  if (partial.risk) {
-    currentConfig.risk = { ...currentConfig.risk, ...partial.risk };
-  }
-  if (partial.entry) {
-    currentConfig.entry = { ...currentConfig.entry, ...partial.entry };
-  }
-  if (partial.exit) {
-    currentConfig.exit = { ...currentConfig.exit, ...partial.exit };
-  }
-  if (partial.instruments) {
-    currentConfig.instruments = {
-      ...currentConfig.instruments,
-      ...partial.instruments,
-      allowedInstruments: {
-        ...currentConfig.instruments.allowedInstruments,
-        ...(partial.instruments.allowedInstruments || {}),
-      },
-    };
-  }
-  if (partial.sessions) {
-    currentConfig.sessions = {
-      ...currentConfig.sessions,
-      ...partial.sessions,
-      activeDays: {
-        ...currentConfig.sessions.activeDays,
-        ...(partial.sessions.activeDays || {}),
-      },
-    };
-  }
-  if (partial.notifications) {
-    currentConfig.notifications = { ...currentConfig.notifications, ...partial.notifications };
-  }
-  if (partial.protection) {
-    currentConfig.protection = { ...currentConfig.protection, ...partial.protection };
-  }
-  if (partial.account) {
-    currentConfig.account = { ...currentConfig.account, ...partial.account };
-  }
+
   return getConfig();
 }
 
-export function resetConfig(): BotConfig {
+/**
+ * Reset config to defaults and persist to DB.
+ */
+export async function resetConfig(userId?: number): Promise<BotConfig> {
   currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+
+  const uid = userId ?? currentUserId;
+  if (uid) {
+    await saveConfigToDb(uid);
+  }
+
   return getConfig();
 }
 

@@ -212,3 +212,58 @@
 - [x] UI: config snapshot display showing exact parameters used for the run
 - [x] UI: loading state with progress bar during backtest execution
 - [x] UI: comparison mode — save runs to localStorage (max 20), A/B selection, side-by-side metric table with delta coloring, config diff display
+
+## Quality Gap Fixes — Production-Grade Rebuild
+### 1. Persist state to DB (critical — all state lost on restart)
+- [x] Add `bot_config` table to schema (JSON column for full config, userId, updatedAt)
+- [x] Add `trade_reasonings` table (positionId, symbol, direction, confluenceScore, session, timeframe, factors JSON, summary, bias, createdAt)
+- [x] Add `trade_post_mortems` table (positionId, symbol, exitReason, whatWorked, whatFailed, lessonLearned, exitPrice, pnl, createdAt)
+- [x] Run pnpm db:push to migrate schema (7 tables, migration applied)
+- [x] Update botConfig.ts to load/save config from DB instead of in-memory variable
+- [x] Update botEngine.ts to persist trade reasonings to DB on trade placement
+- [x] Update botEngine.ts to persist post-mortems to DB on trade close
+- [x] Update routers.ts to query reasoning/post-mortems from DB
+- [x] Add reasoning/post-mortem columns to trades table (confluenceScore, reasoningJson, postMortemJson)
+
+### 2. BotView engine controls (critical — no way to start autonomous engine)
+- [x] Add engine start/stop buttons to BotView (Start Engine / Stop Engine)
+- [x] Add auto-trade toggle switch (custom toggle component)
+- [x] Add manual scan trigger button (Scan Now)
+- [x] Add scan interval selector (30s, 60s, 2m, 5m, 10m)
+- [x] Show engine status indicator (ACTIVE/INACTIVE badge + pulse dot)
+
+### 3. ICT Analysis real visualizations (significant)
+- [x] Session Map: SVG 24h timeline with colored session blocks, NOW marker, kill zone legend
+- [x] Currency Strength: SVG horizontal bar chart ranked by strength, color-coded green/red, strongest/weakest summary
+- [x] Correlation Matrix: color-coded 8x8 grid with correlation coefficients and legend
+- [x] PD/PW Levels: SVG price ladder with colored markers, daily/weekly range display
+- [x] Judas Swing: visual detection display with sweep direction, entry zone, and explanation
+- [x] Premium/Discount: SVG zone indicator with OTE zone, equilibrium line, and current position
+
+### 4. Dashboard equity curve enhancement
+- [x] Add drawdown overlay line to equity curve
+- [x] Add time range selector (1W, 1M, 3M, 6M, All)
+- [x] Add benchmark line (starting balance)
+
+### 5. Notification system
+- [x] Wire notifyOwner for high-confluence signals
+- [x] Wire notifyOwner for trade placements
+- [x] Wire notifyOwner for SL/TP hits
+- [x] Create notifications.ts module with config-aware notification helpers
+- [x] Wire notifyEngineError for bot engine errors
+
+### 6. Settings persistence
+- [x] Move risk management settings from localStorage to DB (via user_settings table)
+- [x] Move preferences from localStorage to DB
+- [x] Settings view reads/writes via tRPC instead of localStorage
+- [x] Add tRPC routes: settings.get, settings.updateRisk, settings.updatePreferences
+- [x] Auto-migrate from localStorage on first load if no server data exists
+
+### 7. Live Economic Calendar Enhancement
+- [x] Replace static schedule with live ForexFactory/FairEconomy API feed
+- [x] Add 15-minute server-side cache to avoid rate limits
+- [x] Show forecast/previous/actual values in event rows
+- [x] Add LIVE DATA / SCHEDULE indicator badge
+- [x] Add last updated timestamp
+- [x] Fallback to static schedule when live feed unavailable
+- [x] Add CN flag for CNY events

@@ -3,8 +3,8 @@ import { getFundamentalsData, getEventsForPair, hasUpcomingHighImpact } from "./
 
 describe("Fundamentals / Economic Calendar", () => {
   describe("getFundamentalsData", () => {
-    it("returns a valid FundamentalsData structure", () => {
-      const data = getFundamentalsData();
+    it("returns a valid FundamentalsData structure", async () => {
+      const data = await getFundamentalsData();
       expect(data).toHaveProperty("upcomingEvents");
       expect(data).toHaveProperty("todayEvents");
       expect(data).toHaveProperty("thisWeekEvents");
@@ -17,8 +17,8 @@ describe("Fundamentals / Economic Calendar", () => {
       expect(Array.isArray(data.thisWeekEvents)).toBe(true);
     });
 
-    it("upcoming events span up to 30 days", () => {
-      const data = getFundamentalsData();
+    it("upcoming events span up to 30 days", async () => {
+      const data = await getFundamentalsData();
       expect(data.upcomingEvents.length).toBeGreaterThan(0);
       // All events should be in the future (or today)
       const now = new Date();
@@ -29,8 +29,8 @@ describe("Fundamentals / Economic Calendar", () => {
       }
     });
 
-    it("events are sorted by scheduled time", () => {
-      const data = getFundamentalsData();
+    it("events are sorted by scheduled time", async () => {
+      const data = await getFundamentalsData();
       for (let i = 1; i < data.upcomingEvents.length; i++) {
         const prev = new Date(data.upcomingEvents[i - 1].scheduledTime).getTime();
         const curr = new Date(data.upcomingEvents[i].scheduledTime).getTime();
@@ -38,8 +38,8 @@ describe("Fundamentals / Economic Calendar", () => {
       }
     });
 
-    it("impact counts match event data", () => {
-      const data = getFundamentalsData();
+    it("impact counts match event data", async () => {
+      const data = await getFundamentalsData();
       const highCount = data.upcomingEvents.filter(e => e.impact === "high").length;
       const medCount = data.upcomingEvents.filter(e => e.impact === "medium").length;
       const lowCount = data.upcomingEvents.filter(e => e.impact === "low").length;
@@ -48,8 +48,8 @@ describe("Fundamentals / Economic Calendar", () => {
       expect(data.lowImpactCount).toBe(lowCount);
     });
 
-    it("currency exposure aggregates correctly from this week events", () => {
-      const data = getFundamentalsData();
+    it("currency exposure aggregates correctly from this week events", async () => {
+      const data = await getFundamentalsData();
       // Verify that each currency in exposure exists in thisWeekEvents
       for (const [currency, counts] of Object.entries(data.currencyExposure)) {
         const eventsForCurrency = data.thisWeekEvents.filter(e => e.currency === currency);
@@ -62,8 +62,8 @@ describe("Fundamentals / Economic Calendar", () => {
       }
     });
 
-    it("each event has required fields", () => {
-      const data = getFundamentalsData();
+    it("each event has required fields", async () => {
+      const data = await getFundamentalsData();
       for (const event of data.upcomingEvents.slice(0, 10)) {
         expect(event.id).toBeTruthy();
         expect(event.name).toBeTruthy();
@@ -75,28 +75,27 @@ describe("Fundamentals / Economic Calendar", () => {
         expect(Array.isArray(event.affectedPairs)).toBe(true);
         expect(event.affectedPairs.length).toBeGreaterThan(0);
         expect(event.scheduledTime).toBeTruthy();
-        expect(event.isRecurring).toBe(true);
       }
     });
   });
 
   describe("getEventsForPair", () => {
-    it("returns events that include the given pair in affectedPairs", () => {
-      const events = getEventsForPair("EUR/USD");
+    it("returns events that include the given pair in affectedPairs", async () => {
+      const events = await getEventsForPair("EUR/USD");
       for (const event of events) {
         expect(event.affectedPairs).toContain("EUR/USD");
       }
     });
 
-    it("returns events for USD/JPY", () => {
-      const events = getEventsForPair("USD/JPY");
+    it("returns events for USD/JPY", async () => {
+      const events = await getEventsForPair("USD/JPY");
       for (const event of events) {
         expect(event.affectedPairs).toContain("USD/JPY");
       }
     });
 
-    it("returns events within the next 7 days", () => {
-      const events = getEventsForPair("EUR/USD");
+    it("returns events within the next 7 days", async () => {
+      const events = await getEventsForPair("EUR/USD");
       const now = new Date();
       const sevenDaysLater = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000);
       for (const event of events) {
@@ -105,22 +104,22 @@ describe("Fundamentals / Economic Calendar", () => {
       }
     });
 
-    it("returns empty array for a pair with no events", () => {
-      const events = getEventsForPair("FAKE/PAIR");
+    it("returns empty array for a pair with no events", async () => {
+      const events = await getEventsForPair("FAKE/PAIR");
       expect(events).toEqual([]);
     });
   });
 
   describe("hasUpcomingHighImpact", () => {
-    it("returns an object with hasEvent boolean", () => {
-      const result = hasUpcomingHighImpact("EUR/USD", 30);
+    it("returns an object with hasEvent boolean", async () => {
+      const result = await hasUpcomingHighImpact("EUR/USD", 30);
       expect(result).toHaveProperty("hasEvent");
       expect(typeof result.hasEvent).toBe("boolean");
     });
 
-    it("if hasEvent is true, event is provided", () => {
+    it("if hasEvent is true, event is provided", async () => {
       // Check with a very wide window to increase chance of finding an event
-      const result = hasUpcomingHighImpact("EUR/USD", 60 * 24 * 30); // 30 days
+      const result = await hasUpcomingHighImpact("EUR/USD", 60 * 24 * 30); // 30 days
       if (result.hasEvent) {
         expect(result.event).toBeDefined();
         expect(result.event!.impact).toBe("high");
@@ -128,14 +127,14 @@ describe("Fundamentals / Economic Calendar", () => {
       }
     });
 
-    it("returns false for a pair with no events", () => {
-      const result = hasUpcomingHighImpact("FAKE/PAIR", 30);
+    it("returns false for a pair with no events", async () => {
+      const result = await hasUpcomingHighImpact("FAKE/PAIR", 30);
       expect(result.hasEvent).toBe(false);
       expect(result.event).toBeUndefined();
     });
 
-    it("returns false for 0 minute window", () => {
-      const result = hasUpcomingHighImpact("EUR/USD", 0);
+    it("returns false for 0 minute window", async () => {
+      const result = await hasUpcomingHighImpact("EUR/USD", 0);
       expect(result.hasEvent).toBe(false);
     });
   });

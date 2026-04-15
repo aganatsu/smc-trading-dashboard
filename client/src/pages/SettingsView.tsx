@@ -2,7 +2,7 @@
  * SettingsView — Broker connection, risk management, preferences, shortcuts
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 import {
   Settings, Link2, Shield, Palette, Keyboard, Info,
@@ -223,25 +223,48 @@ function BrokerSettings() {
 }
 
 function RiskSettings() {
-  // Load saved settings on mount
-  const savedRisk = (() => {
-    try {
-      const s = localStorage.getItem('smc_risk_settings');
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
-  })();
-  const [maxRiskPerTrade, setMaxRiskPerTrade] = useState(String(savedRisk?.maxRiskPerTrade ?? '1'));
-  const [maxPortfolioHeat, setMaxPortfolioHeat] = useState(String(savedRisk?.maxPortfolioHeat ?? '6'));
-  const [maxPositions, setMaxPositions] = useState(String(savedRisk?.maxPositions ?? '5'));
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { retry: false });
+  const updateRisk = trpc.settings.updateRisk.useMutation({
+    onSuccess: () => {
+      settingsQuery.refetch();
+      toast.success('Risk settings saved to server');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [maxRiskPerTrade, setMaxRiskPerTrade] = useState('1');
+  const [maxPortfolioHeat, setMaxPortfolioHeat] = useState('6');
+  const [maxPositions, setMaxPositions] = useState('5');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (settingsQuery.data?.riskSettings && !loaded) {
+      const r = settingsQuery.data.riskSettings;
+      setMaxRiskPerTrade(String(r.maxRiskPerTrade ?? 1));
+      setMaxPortfolioHeat(String(r.maxPortfolioHeat ?? 6));
+      setMaxPositions(String(r.maxPositions ?? 5));
+      setLoaded(true);
+    } else if (settingsQuery.data && !settingsQuery.data.riskSettings && !loaded) {
+      // No server data yet — try localStorage migration
+      try {
+        const s = localStorage.getItem('smc_risk_settings');
+        if (s) {
+          const parsed = JSON.parse(s);
+          setMaxRiskPerTrade(String(parsed.maxRiskPerTrade ?? 1));
+          setMaxPortfolioHeat(String(parsed.maxPortfolioHeat ?? 6));
+          setMaxPositions(String(parsed.maxPositions ?? 5));
+        }
+      } catch {}
+      setLoaded(true);
+    }
+  }, [settingsQuery.data, loaded]);
 
   const handleSave = () => {
-    // Save to localStorage for now
-    localStorage.setItem('smc_risk_settings', JSON.stringify({
-      maxRiskPerTrade: parseFloat(maxRiskPerTrade),
-      maxPortfolioHeat: parseFloat(maxPortfolioHeat),
-      maxPositions: parseInt(maxPositions),
-    }));
-    toast.success('Risk settings saved');
+    updateRisk.mutate({
+      maxRiskPerTrade: parseFloat(maxRiskPerTrade) || 1,
+      maxPortfolioHeat: parseFloat(maxPortfolioHeat) || 6,
+      maxPositions: parseInt(maxPositions) || 5,
+    });
   };
 
   return (
@@ -291,35 +314,66 @@ function RiskSettings() {
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-cyan text-background text-xs font-mono font-bold hover:bg-cyan/80 transition-colors"
+          disabled={updateRisk.isPending}
+          className="px-4 py-2 bg-cyan text-background text-xs font-mono font-bold hover:bg-cyan/80 disabled:opacity-50 transition-colors"
         >
-          Save Settings
+          {updateRisk.isPending ? 'Saving...' : 'Save Settings'}
         </button>
+        {settingsQuery.isLoading && (
+          <span className="text-[10px] text-muted-foreground font-mono ml-2">Loading from server...</span>
+        )}
       </div>
     </div>
   );
 }
 
 function PreferencesSettings() {
-  const savedPrefs = (() => {
-    try {
-      const s = localStorage.getItem('smc_preferences');
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
-  })();
-  const [defaultInstrument, setDefaultInstrument] = useState(savedPrefs?.defaultInstrument ?? 'EUR/USD');
-  const [defaultTimeframe, setDefaultTimeframe] = useState(savedPrefs?.defaultTimeframe ?? '4h');
-  const [autoRefresh, setAutoRefresh] = useState(savedPrefs?.autoRefresh ?? true);
-  const [refreshInterval, setRefreshInterval] = useState(String(savedPrefs?.refreshInterval ?? '30'));
+  const settingsQuery = trpc.settings.get.useQuery(undefined, { retry: false });
+  const updatePrefs = trpc.settings.updatePreferences.useMutation({
+    onSuccess: () => {
+      settingsQuery.refetch();
+      toast.success('Preferences saved to server');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [defaultInstrument, setDefaultInstrument] = useState('EUR/USD');
+  const [defaultTimeframe, setDefaultTimeframe] = useState('4h');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState('30');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (settingsQuery.data?.preferences && !loaded) {
+      const p = settingsQuery.data.preferences;
+      setDefaultInstrument(p.defaultInstrument ?? 'EUR/USD');
+      setDefaultTimeframe(p.defaultTimeframe ?? '4h');
+      setAutoRefresh(p.autoRefresh ?? true);
+      setRefreshInterval(String(p.refreshInterval ?? 30));
+      setLoaded(true);
+    } else if (settingsQuery.data && !settingsQuery.data.preferences && !loaded) {
+      // No server data yet — try localStorage migration
+      try {
+        const s = localStorage.getItem('smc_preferences');
+        if (s) {
+          const parsed = JSON.parse(s);
+          setDefaultInstrument(parsed.defaultInstrument ?? 'EUR/USD');
+          setDefaultTimeframe(parsed.defaultTimeframe ?? '4h');
+          setAutoRefresh(parsed.autoRefresh ?? true);
+          setRefreshInterval(String(parsed.refreshInterval ?? 30));
+        }
+      } catch {}
+      setLoaded(true);
+    }
+  }, [settingsQuery.data, loaded]);
 
   const handleSave = () => {
-    localStorage.setItem('smc_preferences', JSON.stringify({
+    updatePrefs.mutate({
       defaultInstrument,
       defaultTimeframe,
       autoRefresh,
-      refreshInterval: parseInt(refreshInterval),
-    }));
-    toast.success('Preferences saved');
+      refreshInterval: parseInt(refreshInterval) || 30,
+    });
   };
 
   return (
@@ -386,10 +440,14 @@ function PreferencesSettings() {
         </div>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-cyan text-background text-xs font-mono font-bold hover:bg-cyan/80 transition-colors"
+          disabled={updatePrefs.isPending}
+          className="px-4 py-2 bg-cyan text-background text-xs font-mono font-bold hover:bg-cyan/80 disabled:opacity-50 transition-colors"
         >
-          Save Preferences
+          {updatePrefs.isPending ? 'Saving...' : 'Save Preferences'}
         </button>
+        {settingsQuery.isLoading && (
+          <span className="text-[10px] text-muted-foreground font-mono ml-2">Loading from server...</span>
+        )}
       </div>
     </div>
   );

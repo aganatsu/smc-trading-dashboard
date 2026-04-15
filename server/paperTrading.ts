@@ -16,6 +16,7 @@
  */
 
 import { nanoid } from 'nanoid';
+import { notifyTradeClosed, notifyTradePlaced } from './notifications';
 import { fetchQuoteFromYahoo } from './marketData';
 import { createTrade } from './db';
 import { validateTradeAgainstConfig, getConfig } from './botConfig';
@@ -413,6 +414,18 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
   
   const pnlStr = finalPnl >= 0 ? `+$${finalPnl.toFixed(2)}` : `-$${Math.abs(finalPnl).toFixed(2)}`;
   addLog('trade', `Position closed: ${pos.symbol} ${pos.direction.toUpperCase()} ${pos.size} lots. P&L: ${pnlStr}. Reason: ${reason.replace('_', ' ')}`);
+
+  // Notify owner of trade closure
+  notifyTradeClosed({
+    symbol: pos.symbol,
+    direction: pos.direction,
+    size: pos.size,
+    entryPrice: pos.entryPrice,
+    exitPrice,
+    pnl: finalPnl,
+    pnlPips: finalPips,
+    closeReason: reason,
+  });
   
   // Auto-log to journal
   if (ownerUserId) {
@@ -608,6 +621,18 @@ export async function placeOrder(params: {
     
     addLog('signal', `${symbol} ${direction === 'long' ? 'BUY' : 'SELL'} Signal Detected (${reason})`);
     addLog('trade', `Executing ${direction === 'long' ? 'BUY' : 'SELL'} ${size} ${symbol} @ ${entryPrice}. Order ID: ${orderId}`);
+
+    // Notify owner of trade placement (manual orders)
+    notifyTradePlaced({
+      symbol,
+      direction,
+      size,
+      entryPrice,
+      stopLoss: stopLoss ?? null,
+      takeProfit: takeProfit ?? null,
+      reason,
+      score,
+    });
     
     return { success: true, position, entryPrice };
   } catch (err: any) {

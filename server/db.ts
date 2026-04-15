@@ -1,6 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection } from "../drizzle/schema";
+import { InsertUser, users, trades, InsertTrade, Trade, brokerConnections, InsertBrokerConnection, botConfigs, InsertBotConfigRow, tradeReasonings, InsertTradeReasoningRow, tradePostMortems, InsertTradePostMortemRow, userSettings, InsertUserSettingsRow } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -248,4 +248,187 @@ export async function getClosedTradesForEquityCurve(userId: number) {
     .from(trades)
     .where(and(eq(trades.userId, userId), eq(trades.status, "closed")))
     .orderBy(trades.exitTime);
+}
+
+// ── Bot Config Queries ──
+
+export async function getBotConfig(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(botConfigs)
+    .where(eq(botConfigs.userId, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertBotConfig(userId: number, configJson: unknown) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getBotConfig(userId);
+  if (existing) {
+    await db
+      .update(botConfigs)
+      .set({ configJson })
+      .where(eq(botConfigs.userId, userId));
+  } else {
+    await db.insert(botConfigs).values({ userId, configJson });
+  }
+}
+
+// ── Trade Reasoning Queries ──
+
+export async function insertTradeReasoning(data: InsertTradeReasoningRow) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(tradeReasonings).values(data);
+  return result[0].insertId;
+}
+
+export async function getTradeReasoningByPositionId(positionId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(tradeReasonings)
+    .where(eq(tradeReasonings.positionId, positionId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getTradeReasoningByTradeId(tradeId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(tradeReasonings)
+    .where(eq(tradeReasonings.tradeId, tradeId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getRecentTradeReasonings(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(tradeReasonings)
+    .orderBy(desc(tradeReasonings.createdAt))
+    .limit(limit);
+}
+
+// ── Trade Post-Mortem Queries ──
+
+export async function insertTradePostMortem(data: InsertTradePostMortemRow) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(tradePostMortems).values(data);
+  return result[0].insertId;
+}
+
+export async function getTradePostMortemByPositionId(positionId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(tradePostMortems)
+    .where(eq(tradePostMortems.positionId, positionId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getTradePostMortemByTradeId(tradeId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(tradePostMortems)
+    .where(eq(tradePostMortems.tradeId, tradeId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getRecentTradePostMortems(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(tradePostMortems)
+    .orderBy(desc(tradePostMortems.createdAt))
+    .limit(limit);
+}
+
+// ── User Settings Queries ──
+
+export async function getUserSettings(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(userSettings)
+    .where(eq(userSettings.userId, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertUserSettings(userId: number, data: { riskSettingsJson?: unknown; preferencesJson?: unknown }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getUserSettings(userId);
+  if (existing) {
+    const updateSet: Record<string, unknown> = {};
+    if (data.riskSettingsJson !== undefined) updateSet.riskSettingsJson = data.riskSettingsJson;
+    if (data.preferencesJson !== undefined) updateSet.preferencesJson = data.preferencesJson;
+    await db
+      .update(userSettings)
+      .set(updateSet)
+      .where(eq(userSettings.userId, userId));
+  } else {
+    await db.insert(userSettings).values({
+      userId,
+      riskSettingsJson: data.riskSettingsJson ?? null,
+      preferencesJson: data.preferencesJson ?? null,
+    });
+  }
+}
+
+// ── Update trade with reasoning/post-mortem JSON ──
+
+export async function updateTradeReasoningJson(tradeId: number, userId: number, reasoningJson: unknown) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db
+    .update(trades)
+    .set({ reasoningJson })
+    .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
+}
+
+export async function updateTradePostMortemJson(tradeId: number, userId: number, postMortemJson: unknown) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db
+    .update(trades)
+    .set({ postMortemJson })
+    .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)));
 }

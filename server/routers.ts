@@ -28,7 +28,20 @@ import {
   startEngine, pauseEngine, stopEngine, resetAccount,
   setOwnerUserId, getLog as getPaperLog,
 } from "./paperTrading";
-import { getConfig, updateConfig, resetConfig, type BotConfig } from "./botConfig";
+import { getConfig, updateConfig, resetConfig, loadConfigFromDb, isConfigLoaded, type BotConfig } from "./botConfig";
+import {
+  getBotConfig as dbGetBotConfig,
+  getTradeReasoningByPositionId,
+  getTradeReasoningByTradeId,
+  getRecentTradeReasonings,
+  getTradePostMortemByPositionId,
+  getTradePostMortemByTradeId,
+  getRecentTradePostMortems,
+  getUserSettings,
+  upsertUserSettings,
+  updateTradeReasoningJson,
+  updateTradePostMortemJson,
+} from "./db";
 import {
   calculateCurrencyStrength,
   calculateCorrelation,
@@ -62,12 +75,16 @@ import { runBacktest, getBacktestProgress, getLastBacktestResult } from "./backt
 export const appRouter = router({
   system: systemRouter,
 
-  // ─── Bot Configuration ──────────────────────────────────────────────
+  // ─── Bot Configuration (persisted to DB) ─────────────────────────────
   botConfig: router({
-    get: publicProcedure.query(() => {
+    get: protectedProcedure.query(async ({ ctx }) => {
+      // Load from DB on first access
+      if (!isConfigLoaded()) {
+        await loadConfigFromDb(ctx.user.id);
+      }
       return getConfig();
     }),
-    update: publicProcedure
+    update: protectedProcedure
       .input(z.object({
         strategy: z.any().optional(),
         risk: z.any().optional(),
@@ -79,11 +96,11 @@ export const appRouter = router({
         protection: z.any().optional(),
         account: z.any().optional(),
       }))
-      .mutation(({ input }) => {
-        return updateConfig(input as Partial<BotConfig>);
+      .mutation(async ({ input, ctx }) => {
+        return updateConfig(input as Partial<BotConfig>, ctx.user.id);
       }),
-    reset: publicProcedure.mutation(() => {
-      return resetConfig();
+    reset: protectedProcedure.mutation(async ({ ctx }) => {
+      return resetConfig(ctx.user.id);
     }),
   }),
   auth: router({
@@ -123,18 +140,18 @@ export const appRouter = router({
 
   // ─── Fundamentals & Economic Calendar ────────────────────────────
   fundamentals: router({
-    data: publicProcedure.query(() => {
-      return getFundamentalsData();
+    data: publicProcedure.query(async () => {
+      return await getFundamentalsData();
     }),
     eventsForPair: publicProcedure
       .input(z.object({ pair: z.string() }))
-      .query(({ input }) => {
-        return getEventsForPair(input.pair);
+      .query(async ({ input }) => {
+        return await getEventsForPair(input.pair);
       }),
     highImpactCheck: publicProcedure
       .input(z.object({ pair: z.string(), withinMinutes: z.number().optional().default(30) }))
-      .query(({ input }) => {
-        return hasUpcomingHighImpact(input.pair, input.withinMinutes);
+      .query(async ({ input }) => {
+        return await hasUpcomingHighImpact(input.pair, input.withinMinutes);
       }),
   }),
 
@@ -751,13 +768,87 @@ export const appRouter = router({
 
     tradeReasoning: publicProcedure
       .input(z.object({ positionId: z.union([z.string(), z.number()]).transform(v => String(v)) }))
-      .query(({ input }) => {
-        return getTradeReasoning(input.positionId);
+      .query(async ({ input }) => {
+        // Try in-memory first (current session), then fall back to DB
+        const memReasoning = getTradeReasoning(input.positionId);
+        if (memReasoning) return memReasoning;
+
+        // Try DB lookup
+        const dbRow = await getTradeReasoningByPositionId(input.positionId);
+        if (dbRow) {
+          return {
+            summary: dbRow.summary || '',
+            confluenceScore: dbRow.confluenceScore,
+            factors: (dbRow.factorsJson as any[]) || [],
+            session: dbRow.session || '',
+            timeframe: dbRow.timeframe || '',
+            timestamp: new Date(dbRow.createdAt).getTime(),
+          };
+        }
+        return null;
       }),
 
-    postMortems: publicProcedure.query(() => {
-      return getPostMortems();
+    // Also lookup reasoning by trade journal ID (for JournalView)
+    tradeReasoningByTradeId: publicProcedure
+      .input(z.object({ tradeId: z.number() }))
+      .query(async ({ input }) => {
+        const dbRow = await getTradeReasoningByTradeId(input.tradeId);
+        if (dbRow) {
+          return {
+            summary: dbRow.summary || '',
+            confluenceScore: dbRow.confluenceScore,
+            factors: (dbRow.factorsJson as any[]) || [],
+            session: dbRow.session || '',
+            timeframe: dbRow.timeframe || '',
+            timestamp: new Date(dbRow.createdAt).getTime(),
+          };
+        }
+        return null;
+      }),
+
+    postMortems: publicProcedure.query(async () => {
+      // Merge in-memory + DB post-mortems
+      const memPMs = getPostMortems();
+      if (memPMs.length > 0) return memPMs;
+
+      // Fall back to DB
+      const dbRows = await getRecentTradePostMortems(50);
+      return dbRows.map(row => ({
+        tradeId: row.positionId,
+        outcome: (row.pnl && parseFloat(row.pnl) > 0) ? 'win' as const : (row.pnl && parseFloat(row.pnl) < 0) ? 'loss' as const : 'breakeven' as const,
+        pnl: row.pnl ? parseFloat(row.pnl) : 0,
+        holdDuration: '',
+        entryReasoning: { summary: '', confluenceScore: 0, factors: [], session: '', timeframe: '', timestamp: 0 },
+        exitReason: row.exitReason,
+        whatWorked: row.whatWorked ? row.whatWorked.split('\n') : [],
+        whatFailed: row.whatFailed ? row.whatFailed.split('\n') : [],
+        lessonLearned: row.lessonLearned || '',
+      }));
     }),
+
+    // Post-mortem by trade journal ID (for JournalView)
+    postMortemByTradeId: publicProcedure
+      .input(z.object({ tradeId: z.number() }))
+      .query(async ({ input }) => {
+        const dbRow = await getTradePostMortemByTradeId(input.tradeId);
+        if (dbRow) {
+          // If detailJson has the full object, return it
+          if (dbRow.detailJson && typeof dbRow.detailJson === 'object') {
+            return dbRow.detailJson as any;
+          }
+          return {
+            tradeId: dbRow.positionId,
+            outcome: (dbRow.pnl && parseFloat(dbRow.pnl) > 0) ? 'win' : (dbRow.pnl && parseFloat(dbRow.pnl) < 0) ? 'loss' : 'breakeven',
+            pnl: dbRow.pnl ? parseFloat(dbRow.pnl) : 0,
+            holdDuration: '',
+            exitReason: dbRow.exitReason,
+            whatWorked: dbRow.whatWorked ? dbRow.whatWorked.split('\n') : [],
+            whatFailed: dbRow.whatFailed ? dbRow.whatFailed.split('\n') : [],
+            lessonLearned: dbRow.lessonLearned || '',
+          };
+        }
+        return null;
+      }),
   }),
 
   // ─── Backtest Engine ──────────────────────────────────────────────
@@ -844,7 +935,49 @@ export const appRouter = router({
     lastResult: publicProcedure.query(() => {
       return getLastBacktestResult();
     }),
+   }),
+
+  // ─── User Settings (persisted to DB) ──────────────────────────────
+  settings: router({
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const row = await getUserSettings(ctx.user.id);
+      return {
+        riskSettings: row?.riskSettingsJson as {
+          maxRiskPerTrade: number;
+          maxPortfolioHeat: number;
+          maxPositions: number;
+        } | null,
+        preferences: row?.preferencesJson as {
+          defaultInstrument: string;
+          defaultTimeframe: string;
+          autoRefresh: boolean;
+          refreshInterval: number;
+          theme: string;
+        } | null,
+      };
+    }),
+    updateRisk: protectedProcedure
+      .input(z.object({
+        maxRiskPerTrade: z.number().min(0.1).max(100),
+        maxPortfolioHeat: z.number().min(1).max(100),
+        maxPositions: z.number().int().min(1).max(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await upsertUserSettings(ctx.user.id, { riskSettingsJson: input });
+        return { success: true };
+      }),
+    updatePreferences: protectedProcedure
+      .input(z.object({
+        defaultInstrument: z.string(),
+        defaultTimeframe: z.string(),
+        autoRefresh: z.boolean(),
+        refreshInterval: z.number().int().min(5).max(300),
+        theme: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await upsertUserSettings(ctx.user.id, { preferencesJson: input });
+        return { success: true };
+      }),
   }),
 });
-
 export type AppRouter = typeof appRouter;

@@ -28,6 +28,15 @@ import {
   registerPostMortemGenerator,
   type PaperPosition,
 } from "./paperTrading";
+import { notifySignalDetected, notifyTradePlaced, notifyTradeClosed, notifyEngineError } from "./notifications";
+import {
+  insertTradeReasoning,
+  insertTradePostMortem,
+  getTradeReasoningByPositionId as dbGetReasoning,
+  getTradePostMortemByPositionId as dbGetPostMortem,
+  getRecentTradeReasonings as dbGetRecentReasonings,
+  getRecentTradePostMortems as dbGetRecentPostMortems,
+} from "./db";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -509,11 +518,29 @@ async function executeTrade(scanResult: ScanResult, config: BotConfig): Promise<
     });
 
     if (result.success && result.position) {
-      // Store reasoning for post-mortem later
+      // Store reasoning in memory AND persist to DB
       state.tradeReasonings.set(result.position.id, scanResult.reasoning);
       state.totalTradesPlaced++;
       addLog('trade', `AUTO-TRADE: ${direction.toUpperCase()} ${symbol} ${size} lots @ ${entryPrice.toFixed(5)} | SL: ${sl.toFixed(5)} | TP: ${tp.toFixed(5)} | Score: ${scanResult.confluenceScore}/10`);
       addLog('info', `REASON: ${scanResult.reasoning.summary}`);
+
+      // Notify owner of trade placement
+      notifyTradePlaced({
+        symbol,
+        direction,
+        size,
+        entryPrice,
+        stopLoss: sl,
+        takeProfit: tp,
+        reason: scanResult.reasoning.summary,
+        score: scanResult.confluenceScore,
+      });
+
+      // Persist reasoning to DB (fire-and-forget, don't block trade)
+      persistReasoning(result.position.id, symbol, direction, scanResult.reasoning).catch((err: any) =>
+        console.warn('[Engine] Failed to persist reasoning:', err.message)
+      );
+
       return true;
     } else {
       state.totalRejected++;
@@ -522,7 +549,55 @@ async function executeTrade(scanResult: ScanResult, config: BotConfig): Promise<
     }
   } catch (err: any) {
     addLog('error', `ERROR: Failed to execute ${symbol} trade — ${err.message}`);
+    notifyEngineError({ context: `Trade execution: ${symbol}`, error: err.message });
     return false;
+  }
+}
+
+// ─── DB Persistence Helpers ────────────────────────────────────────
+
+async function persistReasoning(
+  positionId: string,
+  symbol: string,
+  direction: 'long' | 'short',
+  reasoning: TradeReasoning,
+): Promise<void> {
+  try {
+    await insertTradeReasoning({
+      positionId,
+      symbol,
+      direction,
+      confluenceScore: reasoning.confluenceScore,
+      session: reasoning.session || null,
+      timeframe: reasoning.timeframe || null,
+      bias: null,
+      factorsJson: reasoning.factors,
+      summary: reasoning.summary,
+    });
+  } catch (err: any) {
+    console.warn('[Engine] persistReasoning failed:', err.message);
+  }
+}
+
+async function persistPostMortem(
+  position: PaperPosition,
+  exitReason: string,
+  postMortem: TradePostMortem,
+): Promise<void> {
+  try {
+    await insertTradePostMortem({
+      positionId: position.id,
+      symbol: position.symbol,
+      exitReason,
+      whatWorked: postMortem.whatWorked.join('\n'),
+      whatFailed: postMortem.whatFailed.join('\n'),
+      lessonLearned: postMortem.lessonLearned,
+      exitPrice: position.currentPrice?.toString() ?? null,
+      pnl: postMortem.pnl?.toString() ?? null,
+      detailJson: postMortem,
+    });
+  } catch (err: any) {
+    console.warn('[Engine] persistPostMortem failed:', err.message);
   }
 }
 
@@ -559,6 +634,14 @@ async function runScanCycle(): Promise<void> {
       if (result.signal !== 'no_signal') {
         state.totalSignals++;
         addLog('signal', `SIGNAL: ${result.signal.toUpperCase()} ${symbol} (score: ${result.confluenceScore}/10)`);
+
+        // Notify owner of signal detection
+        notifySignalDetected({
+          symbol,
+          direction: result.signal,
+          confluenceScore: result.confluenceScore,
+          summary: result.reasoning.summary,
+        });
 
         if (result.rejectionReason) {
           state.totalRejected++;
@@ -643,6 +726,11 @@ export function generatePostMortem(
 
   state.postMortems.push(postMortem);
   if (state.postMortems.length > 100) state.postMortems.shift(); // Keep last 100
+
+  // Persist post-mortem to DB (fire-and-forget)
+  persistPostMortem(position, exitReason, postMortem).catch((err: any) =>
+    console.warn('[Engine] Failed to persist post-mortem:', err.message)
+  );
 
   return postMortem;
 }

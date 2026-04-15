@@ -55,9 +55,14 @@ export default function BotView() {
   const closeMut = trpc.paper.closePosition.useMutation({ onSuccess: () => status.refetch() });
   const cancelPendingMut = trpc.paper.cancelPendingOrder.useMutation({ onSuccess: () => status.refetch() });
 
-  // Autonomous engine state
+  // Autonomous engine state + controls
   const engineState = trpc.engine.state.useQuery(undefined, { refetchInterval: 5000 });
   const scanResults = trpc.engine.scanResults.useQuery(undefined, { refetchInterval: 10000 });
+  const engineStartMut = trpc.engine.start.useMutation({ onSuccess: () => { engineState.refetch(); status.refetch(); } });
+  const engineStopMut = trpc.engine.stop.useMutation({ onSuccess: () => { engineState.refetch(); status.refetch(); } });
+  const engineAutoTradeMut = trpc.engine.setAutoTrading.useMutation({ onSuccess: () => engineState.refetch() });
+  const engineManualScanMut = trpc.engine.manualScan.useMutation({ onSuccess: () => { engineState.refetch(); scanResults.refetch(); } });
+  const [engineInterval, setEngineInterval] = useState(60);
 
   // Order form state
   const [symbol, setSymbol] = useState('EUR/USD');
@@ -604,63 +609,130 @@ export default function BotView() {
             </div>
           </div>
 
-          {/* Autonomous Engine / Scan Results */}
-          <div className="p-4">
+          {/* ═══ AUTONOMOUS ENGINE CONTROLS ═══ */}
+          <div className="p-4 border-t border-border">
             <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 flex items-center gap-2">
-              Engine Scan Results
+              Autonomous Engine
               {engineState.data?.running && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               )}
+              <span className={`ml-auto text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${
+                engineState.data?.running
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-zinc-700/50 text-zinc-400 border-zinc-600'
+              }`}>
+                {engineState.data?.running ? 'ACTIVE' : 'INACTIVE'}
+              </span>
             </h3>
+
+            {/* Engine Control Buttons */}
+            <div className="flex gap-2 mb-3">
+              {engineState.data?.running ? (
+                <button
+                  onClick={() => engineStopMut.mutate()}
+                  disabled={engineStopMut.isPending}
+                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded transition"
+                >
+                  {engineStopMut.isPending ? 'Stopping...' : '■ Stop Engine'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => engineStartMut.mutate({ intervalSeconds: engineInterval })}
+                  disabled={engineStartMut.isPending}
+                  className="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded transition"
+                >
+                  {engineStartMut.isPending ? 'Starting...' : '▶ Start Engine'}
+                </button>
+              )}
+              <button
+                onClick={() => engineManualScanMut.mutate()}
+                disabled={engineManualScanMut.isPending}
+                className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded transition"
+              >
+                {engineManualScanMut.isPending ? '...' : '⟳ Scan Now'}
+              </button>
+            </div>
+
+            {/* Auto-Trade Toggle */}
+            <div className="flex items-center justify-between mb-2 py-1.5 px-2 rounded bg-card/50 border border-border/50">
+              <div>
+                <div className="text-xs font-bold text-foreground">Auto-Trade</div>
+                <div className="text-[10px] text-muted-foreground">Engine places trades automatically when signals meet config</div>
+              </div>
+              <button
+                onClick={() => engineAutoTradeMut.mutate({ enabled: !engineState.data?.autoTrading })}
+                disabled={engineAutoTradeMut.isPending}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  engineState.data?.autoTrading ? 'bg-emerald-500' : 'bg-zinc-600'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  engineState.data?.autoTrading ? 'translate-x-5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {/* Scan Interval */}
+            <div className="flex items-center justify-between mb-3 py-1.5 px-2 rounded bg-card/50 border border-border/50">
+              <div>
+                <div className="text-xs font-bold text-foreground">Scan Interval</div>
+                <div className="text-[10px] text-muted-foreground">Seconds between each scan cycle</div>
+              </div>
+              <select
+                value={engineInterval}
+                onChange={e => setEngineInterval(Number(e.target.value))}
+                className="bg-background border border-border rounded px-2 py-1 text-xs font-mono"
+              >
+                <option value={30}>30s</option>
+                <option value={60}>60s</option>
+                <option value={120}>2m</option>
+                <option value={300}>5m</option>
+                <option value={600}>10m</option>
+              </select>
+            </div>
+
+            {/* Engine Stats */}
             {engineState.data && (
-              <div className="space-y-1 text-xs font-mono mb-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Engine</span>
-                  <span className={engineState.data.running ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>
-                    {engineState.data.running ? 'RUNNING' : 'STOPPED'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Scans</span>
-                  <span className="text-foreground">{engineState.data.totalScans}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Signals</span>
-                  <span className="text-cyan-400">{engineState.data.totalSignals}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Trades</span>
-                  <span className="text-purple-400">{engineState.data.totalTradesPlaced}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Post-Mortems</span>
-                  <span className="text-foreground">{engineState.data.postMortemCount}</span>
-                </div>
+              <div className="grid grid-cols-4 gap-1 mb-3">
+                {[
+                  { label: 'Scans', value: engineState.data.totalScans, color: 'text-foreground' },
+                  { label: 'Signals', value: engineState.data.totalSignals, color: 'text-cyan-400' },
+                  { label: 'Trades', value: engineState.data.totalTradesPlaced, color: 'text-purple-400' },
+                  { label: 'P-Mort', value: engineState.data.postMortemCount, color: 'text-yellow-400' },
+                ].map(s => (
+                  <div key={s.label} className="text-center py-1.5 rounded bg-card/30 border border-border/30">
+                    <div className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</div>
+                    <div className="text-[9px] text-muted-foreground uppercase">{s.label}</div>
+                  </div>
+                ))}
               </div>
             )}
-            {/* Last scan results */}
+
+            {/* Last Scan Results */}
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Latest Scan Results</h4>
             {scanResults.data && scanResults.data.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {scanResults.data.slice(0, 5).map((sr: any, i: number) => (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {scanResults.data.slice(0, 8).map((sr: any, i: number) => (
                   <div key={i} className="bg-card/50 border border-border/50 rounded p-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-mono font-bold text-foreground">{sr.symbol}</span>
-                      <span className={`text-[10px] font-mono font-bold ${
-                        sr.signal === 'buy' ? 'text-emerald-400' : sr.signal === 'sell' ? 'text-red-400' : 'text-muted-foreground'
-                      }`}>
-                        {sr.signal?.toUpperCase() || 'NEUTRAL'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground">Confluence</span>
-                      <span className={`text-[10px] font-bold ${
-                        sr.confluenceScore >= 70 ? 'text-emerald-400' : sr.confluenceScore >= 50 ? 'text-yellow-400' : 'text-muted-foreground'
-                      }`}>
-                        {sr.confluenceScore}/100
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-mono font-bold ${
+                          sr.signal === 'buy' ? 'text-emerald-400' : sr.signal === 'sell' ? 'text-red-400' : 'text-muted-foreground'
+                        }`}>
+                          {sr.signal?.toUpperCase() || 'NEUTRAL'}
+                        </span>
+                        <span className={`text-[10px] font-bold px-1 rounded ${
+                          sr.confluenceScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                          sr.confluenceScore >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-zinc-700/50 text-muted-foreground'
+                        }`}>
+                          {sr.confluenceScore}/100
+                        </span>
+                      </div>
                     </div>
                     {sr.reasoning?.summary && (
-                      <div className="text-[10px] text-muted-foreground mt-1 truncate">{sr.reasoning.summary}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{sr.reasoning.summary}</div>
                     )}
                     {sr.reasoning?.factors && sr.reasoning.factors.filter((f: any) => f.present).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
@@ -675,8 +747,8 @@ export default function BotView() {
                 ))}
               </div>
             ) : (
-              <div className="text-xs font-mono text-muted-foreground text-center py-2">
-                No scan results yet. Start the engine to begin scanning.
+              <div className="text-xs font-mono text-muted-foreground text-center py-4 border border-dashed border-border/50 rounded">
+                No scan results yet. Start the engine or click Scan Now.
               </div>
             )}
           </div>
