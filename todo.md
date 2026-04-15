@@ -153,3 +153,36 @@
 - [x] Verify BotConfigPanel.tsx has all 8 tabbed sections and save/reset/unsaved-changes feedback
 - [x] Add config-driven engine behavior tests (disabled instrument blocks trade, disabled instrument blocks pending order, relaxed config allows trade)
 - [x] All 112 tests passing across 8 test files
+
+## Phase 16: Restore Missing Features & Autonomous Bot
+
+### Missing Features to Restore
+- [ ] Fundamentals panel — economic calendar, news impact, high-impact events for traded pairs
+- [x] Correlations panel — currency pair correlation matrix, positive/negative correlation alerts
+- [x] Session Map — London/NY/Asian/Sydney session times with price range boxes on chart
+- [x] Heat Map — currency strength meter showing which currencies are strong/weak
+- [x] PD/PW (Previous Day/Previous Week) — automatic PD high/low/open/close and PW high/low levels
+- [x] Judas Swing detection — identify false breakouts at session opens (ICT concept)
+- [ ] Backtest engine — test strategy against historical data with results summary
+
+### Autonomous Bot Decision Engine
+- [x] Bot auto-scan loop: periodically analyze all enabled instruments using SMC analysis
+- [x] Bot uses config parameters (confluence score, enabled setups, R:R, session filter) to decide trades
+- [x] Bot generates detailed reasoning for each trade: which setups triggered, confluence score breakdown, bias alignment
+- [x] Trade reasoning stored with each position (tRPC routes wired)
+- [x] ICT Analysis page: dedicated view with Session Map, Currency Strength, Correlations, PD/PW, Judas, Premium/Discount
+- [x] BotView UI: wire engine.state/scanResults queries to display scan results and trade reasoning in Bot view
+- [x] Journal UI: display trade reasoning and post-mortem in trade detail panel
+
+### Trade Explanation System
+- [x] When trade is placed: show WHY (which OB, FVG, BOS/CHoCH triggered, HTF bias, session, confluence score)
+- [x] Post-mortem generation function created (generatePostMortem)
+- [x] Wire generatePostMortem into paperTrading close flow for SL/TP/manual exits
+- [x] Wire post-mortem into TP close flow
+- [x] Post-mortem analysis visible in Journal trade detail panel
+- [x] Engine logs REASON lines via addLog() during scans
+- [x] BotView terminal: engine log entries will appear during autonomous scans (engine addLog wired to paper trading log)
+
+### Testing Gaps
+- [x] Vitest tests for autonomous engine routes (engine.state, engine.start, engine.stop, engine.manualScan, engine.scanResults, engine.tradeReasoning, engine.postMortems) — 31 tests
+- [x] Vitest tests for post-mortem generation on SL/TP closures

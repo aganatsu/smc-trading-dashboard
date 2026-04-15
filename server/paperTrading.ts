@@ -20,6 +20,12 @@ import { fetchQuoteFromYahoo } from './marketData';
 import { createTrade } from './db';
 import { validateTradeAgainstConfig, getConfig } from './botConfig';
 
+// Lazy import to avoid circular dependency — botEngine imports paperTrading
+let _generatePostMortem: ((position: PaperPosition, exitReason: string) => any) | null = null;
+export function registerPostMortemGenerator(fn: (position: PaperPosition, exitReason: string) => any) {
+  _generatePostMortem = fn;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 export interface PaperPosition {
@@ -187,7 +193,7 @@ let dailyPnlDate = '';
 let logEntries: LogEntry[] = [];
 const MAX_LOG_ENTRIES = 200;
 
-function addLog(level: LogLevel, message: string) {
+export function addLog(level: LogLevel, message: string) {
   const entry: LogEntry = {
     time: new Date().toISOString(),
     level,
@@ -393,6 +399,15 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
   balance += finalPnl;
   if (balance > peakBalance) peakBalance = balance;
   
+  // Generate post-mortem before removing position
+  if (_generatePostMortem) {
+    try {
+      _generatePostMortem(pos, reason);
+    } catch (err) {
+      console.error('[PaperTrading] Post-mortem generation failed:', err);
+    }
+  }
+
   positions.splice(idx, 1);
   tradeHistory.push(record);
   

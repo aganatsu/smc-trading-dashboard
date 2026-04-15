@@ -55,6 +55,10 @@ export default function BotView() {
   const closeMut = trpc.paper.closePosition.useMutation({ onSuccess: () => status.refetch() });
   const cancelPendingMut = trpc.paper.cancelPendingOrder.useMutation({ onSuccess: () => status.refetch() });
 
+  // Autonomous engine state
+  const engineState = trpc.engine.state.useQuery(undefined, { refetchInterval: 5000 });
+  const scanResults = trpc.engine.scanResults.useQuery(undefined, { refetchInterval: 10000 });
+
   // Order form state
   const [symbol, setSymbol] = useState('EUR/USD');
   const [direction, setDirection] = useState<'long' | 'short'>('long');
@@ -578,7 +582,7 @@ export default function BotView() {
           </div>
 
           {/* Trade Summary Grid */}
-          <div className="p-4">
+          <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Trade Summary</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-card/50 rounded p-2 text-center">
@@ -598,6 +602,83 @@ export default function BotView() {
                 <div className="text-[10px] text-muted-foreground uppercase">Rejected</div>
               </div>
             </div>
+          </div>
+
+          {/* Autonomous Engine / Scan Results */}
+          <div className="p-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 flex items-center gap-2">
+              Engine Scan Results
+              {engineState.data?.running && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </h3>
+            {engineState.data && (
+              <div className="space-y-1 text-xs font-mono mb-3">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Engine</span>
+                  <span className={engineState.data.running ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>
+                    {engineState.data.running ? 'RUNNING' : 'STOPPED'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Scans</span>
+                  <span className="text-foreground">{engineState.data.totalScans}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Signals</span>
+                  <span className="text-cyan-400">{engineState.data.totalSignals}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Trades</span>
+                  <span className="text-purple-400">{engineState.data.totalTradesPlaced}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Post-Mortems</span>
+                  <span className="text-foreground">{engineState.data.postMortemCount}</span>
+                </div>
+              </div>
+            )}
+            {/* Last scan results */}
+            {scanResults.data && scanResults.data.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {scanResults.data.slice(0, 5).map((sr: any, i: number) => (
+                  <div key={i} className="bg-card/50 border border-border/50 rounded p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono font-bold text-foreground">{sr.symbol}</span>
+                      <span className={`text-[10px] font-mono font-bold ${
+                        sr.signal === 'buy' ? 'text-emerald-400' : sr.signal === 'sell' ? 'text-red-400' : 'text-muted-foreground'
+                      }`}>
+                        {sr.signal?.toUpperCase() || 'NEUTRAL'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground">Confluence</span>
+                      <span className={`text-[10px] font-bold ${
+                        sr.confluenceScore >= 70 ? 'text-emerald-400' : sr.confluenceScore >= 50 ? 'text-yellow-400' : 'text-muted-foreground'
+                      }`}>
+                        {sr.confluenceScore}/100
+                      </span>
+                    </div>
+                    {sr.reasoning?.summary && (
+                      <div className="text-[10px] text-muted-foreground mt-1 truncate">{sr.reasoning.summary}</div>
+                    )}
+                    {sr.reasoning?.factors && sr.reasoning.factors.filter((f: any) => f.present).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {sr.reasoning.factors.filter((f: any) => f.present).map((f: any, j: number) => (
+                          <span key={j} className="px-1 py-0.5 bg-cyan-500/10 text-cyan-400 text-[9px] border border-cyan-500/20 rounded">
+                            {f.concept}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs font-mono text-muted-foreground text-center py-2">
+                No scan results yet. Start the engine to begin scanning.
+              </div>
+            )}
           </div>
         </div>
       </div>

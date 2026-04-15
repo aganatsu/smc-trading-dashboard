@@ -18,8 +18,9 @@ import ChartView from '@/pages/ChartView';
 import BotView from '@/pages/BotView';
 import JournalView from '@/pages/JournalView';
 import SettingsView from '@/pages/SettingsView';
+import ICTAnalysis from '@/pages/ICTAnalysis';
 
-export type ViewId = 'dashboard' | 'chart' | 'bot' | 'journal' | 'settings';
+export type ViewId = 'dashboard' | 'chart' | 'ict' | 'bot' | 'journal' | 'settings';
 
 interface NavItem {
   id: ViewId;
@@ -31,9 +32,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', shortcut: '1' },
   { id: 'chart', icon: LineChart, label: 'Chart', shortcut: '2' },
-  { id: 'bot', icon: Bot, label: 'Bot', shortcut: '3' },
-  { id: 'journal', icon: BookOpen, label: 'Journal', shortcut: '4' },
-  { id: 'settings', icon: Settings, label: 'Settings', shortcut: '5' },
+  { id: 'ict', icon: Activity, label: 'ICT', shortcut: '3' },
+  { id: 'bot', icon: Bot, label: 'Bot', shortcut: '4' },
+  { id: 'journal', icon: BookOpen, label: 'Journal', shortcut: '5' },
+  { id: 'settings', icon: Settings, label: 'Settings', shortcut: '6' },
 ];
 
 // Instruments available for quick search/filter
@@ -107,7 +109,7 @@ export default function AppShell() {
       }
 
       // Number keys for view switching (only when filter is not focused)
-      if (!isFilterInput && key >= '1' && key <= '5') {
+      if (!isFilterInput && key >= '1' && key <= '6') {
         e.preventDefault();
         const idx = parseInt(key) - 1;
         switchView(NAV_ITEMS[idx].id);
@@ -238,6 +240,11 @@ export default function AppShell() {
           {mountedViews.has('chart') && (
             <div className="absolute inset-0 overflow-hidden" style={{ display: activeView === 'chart' ? 'flex' : 'none' }}>
               <ChartView />
+            </div>
+          )}
+          {mountedViews.has('ict') && (
+            <div className="absolute inset-0 overflow-hidden" style={{ display: activeView === 'ict' ? 'flex' : 'none' }}>
+              <ICTAnalysis />
             </div>
           )}
           {mountedViews.has('bot') && (

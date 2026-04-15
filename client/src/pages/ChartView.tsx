@@ -12,7 +12,7 @@ import { runFullAnalysis, type AnalysisResult, type Candle } from '@/lib/smcAnal
 import {
   ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus,
   Target, Shield, CheckCircle, XCircle, AlertTriangle, PanelRightClose, PanelRightOpen,
-  Compass, Layers, BarChart3
+  Compass, Layers, BarChart3, Clock, Gauge, Activity
 } from 'lucide-react';
 
 export default function ChartView() {
@@ -53,6 +53,27 @@ export default function ChartView() {
       return null;
     }
   }, [candles.data]);
+
+  // ICT data queries
+  const pdLevels = trpc.ict.pdLevels.useQuery(
+    { symbol: selectedSymbol },
+    { refetchInterval: 120000 }
+  );
+  const sessionInfo = trpc.ict.sessionInfo.useQuery(
+    { symbol: selectedSymbol },
+    { refetchInterval: 60000 }
+  );
+  const judasSwing = trpc.ict.judasSwing.useQuery(
+    { symbol: selectedSymbol },
+    { refetchInterval: 60000 }
+  );
+  const premiumDiscount = trpc.ict.premiumDiscount.useQuery(
+    { symbol: selectedSymbol },
+    { refetchInterval: 60000 }
+  );
+
+  const isJPY = selectedSymbol.includes('JPY');
+  const dec = isJPY ? 3 : 5;
 
   // Multi-timeframe analysis
   const weeklyCandles = trpc.market.candles.useQuery(
@@ -383,6 +404,163 @@ export default function ChartView() {
                 </div>
               </div>
             </div>
+          </AccordionPanel>
+
+          {/* PD/PW Levels */}
+          <AccordionPanel
+            id="pdpw"
+            title="PD/PW Levels"
+            expanded={expandedPanels.has('pdpw')}
+            onToggle={() => togglePanel('pdpw')}
+            badge={pdLevels.data ? 'ACTIVE' : undefined}
+          >
+            {pdLevels.isLoading ? <LoadingText /> : pdLevels.data ? (
+              <div className="space-y-2 text-xs font-mono">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">PDH</span><span className="text-bullish font-bold">{pdLevels.data.pdh.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWH</span><span className="text-bullish font-bold">{pdLevels.data.pwh.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PDL</span><span className="text-bearish font-bold">{pdLevels.data.pdl.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWL</span><span className="text-bearish font-bold">{pdLevels.data.pwl.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PDO</span><span className="text-foreground">{pdLevels.data.pdo.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWO</span><span className="text-foreground">{pdLevels.data.pwo.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PDC</span><span className="text-foreground">{pdLevels.data.pdc.toFixed(dec)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWC</span><span className="text-foreground">{pdLevels.data.pwc.toFixed(dec)}</span></div>
+                </div>
+              </div>
+            ) : <div className="text-xs font-mono text-muted-foreground">No PD/PW data</div>}
+          </AccordionPanel>
+
+          {/* Session Info */}
+          <AccordionPanel
+            id="session"
+            title="Session / Kill Zone"
+            expanded={expandedPanels.has('session')}
+            onToggle={() => togglePanel('session')}
+            badge={sessionInfo.data?.name}
+            badgeColor={sessionInfo.data?.isKillZone ? 'text-warning' : sessionInfo.data?.active ? 'text-bullish' : 'text-muted-foreground'}
+          >
+            {sessionInfo.isLoading ? <LoadingText /> : sessionInfo.data ? (
+              <div className="space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Session</span>
+                  <span className="text-foreground font-bold">{sessionInfo.data.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={sessionInfo.data.active ? 'text-bullish font-bold' : 'text-muted-foreground'}>
+                    {sessionInfo.data.active ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Kill Zone</span>
+                  <span className={sessionInfo.data.isKillZone ? 'text-warning font-bold' : 'text-muted-foreground'}>
+                    {sessionInfo.data.isKillZone ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                {sessionInfo.data.sessionHigh > 0 && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Session High</span>
+                      <span className="text-bullish font-bold">{sessionInfo.data.sessionHigh.toFixed(dec)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Session Low</span>
+                      <span className="text-bearish font-bold">{sessionInfo.data.sessionLow.toFixed(dec)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : <div className="text-xs font-mono text-muted-foreground">No session data</div>}
+          </AccordionPanel>
+
+          {/* Judas Swing */}
+          <AccordionPanel
+            id="judas"
+            title="Judas Swing"
+            expanded={expandedPanels.has('judas')}
+            onToggle={() => togglePanel('judas')}
+            badge={judasSwing.data?.detected ? judasSwing.data.type?.toUpperCase() : 'NONE'}
+            badgeColor={judasSwing.data?.detected ? (judasSwing.data.type === 'bullish' ? 'text-bullish' : 'text-bearish') : 'text-muted-foreground'}
+          >
+            {judasSwing.isLoading ? <LoadingText /> : judasSwing.data ? (
+              <div className="space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Detected</span>
+                  <span className={judasSwing.data.detected ? 'text-warning font-bold' : 'text-muted-foreground'}>
+                    {judasSwing.data.detected ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                {judasSwing.data.detected && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Type</span>
+                      <span className={judasSwing.data.type === 'bullish' ? 'text-bullish font-bold' : 'text-bearish font-bold'}>
+                        {judasSwing.data.type?.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Midnight Open</span>
+                      <span className="text-foreground">{judasSwing.data.midnightOpen.toFixed(dec)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Reversal</span>
+                      <span className={judasSwing.data.reversalConfirmed ? 'text-bullish font-bold' : 'text-muted-foreground'}>
+                        {judasSwing.data.reversalConfirmed ? 'CONFIRMED' : 'PENDING'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-1">{judasSwing.data.description}</div>
+              </div>
+            ) : <div className="text-xs font-mono text-muted-foreground">No Judas data</div>}
+          </AccordionPanel>
+
+          {/* Premium / Discount */}
+          <AccordionPanel
+            id="premium"
+            title="Premium / Discount"
+            expanded={expandedPanels.has('premium')}
+            onToggle={() => togglePanel('premium')}
+            badge={premiumDiscount.data?.currentZone.toUpperCase()}
+            badgeColor={premiumDiscount.data?.currentZone === 'premium' ? 'text-bearish' : premiumDiscount.data?.currentZone === 'discount' ? 'text-bullish' : 'text-warning'}
+          >
+            {premiumDiscount.isLoading ? <LoadingText /> : premiumDiscount.data ? (
+              <div className="space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Zone</span>
+                  <span className={`font-bold ${premiumDiscount.data.currentZone === 'premium' ? 'text-bearish' : premiumDiscount.data.currentZone === 'discount' ? 'text-bullish' : 'text-warning'}`}>
+                    {premiumDiscount.data.currentZone.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Zone %</span>
+                  <span className="text-foreground font-bold">{premiumDiscount.data.zonePercent.toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">OTE Zone</span>
+                  <span className={premiumDiscount.data.oteZone ? 'text-cyan font-bold' : 'text-muted-foreground'}>
+                    {premiumDiscount.data.oteZone ? 'YES (62-79%)' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Equilibrium</span>
+                  <span className="text-warning font-bold">{premiumDiscount.data.equilibrium.toFixed(dec)}</span>
+                </div>
+                {/* Visual zone bar */}
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden relative mt-1">
+                  <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-bullish/20" />
+                  <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-bearish/20" />
+                  <div
+                    className="absolute top-0 bottom-0 w-1 bg-foreground rounded-full"
+                    style={{ left: `${premiumDiscount.data.zonePercent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Discount</span>
+                  <span>Premium</span>
+                </div>
+              </div>
+            ) : <div className="text-xs font-mono text-muted-foreground">No P/D data</div>}
           </AccordionPanel>
 
           {/* Risk Calculator */}

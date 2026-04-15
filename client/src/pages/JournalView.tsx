@@ -5,11 +5,12 @@
  * Filters: symbol, direction, date range
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 import {
   BookOpen, TrendingUp, TrendingDown, BarChart3, Target,
-  Plus, Filter, ChevronDown, ArrowUpDown, Calculator, Calendar
+  Plus, Filter, ChevronDown, ArrowUpDown, Calculator, Calendar,
+  Brain, AlertTriangle, CheckCircle, XCircle
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
@@ -302,6 +303,10 @@ export default function JournalView() {
                     </div>
                   </div>
                 )}
+                {/* Trade Reasoning from Bot Engine */}
+                <TradeReasoningPanel tradeId={selectedTrade.id} />
+                {/* Post-Mortem Analysis */}
+                <PostMortemPanel tradeId={selectedTrade.id} status={selectedTrade.status} />
               </div>
             )}
           </div>
@@ -518,6 +523,147 @@ function CalcInput({ label, value, onChange, step }: { label: string; value: str
         step={step || '1'}
         className="w-full bg-muted border border-border px-2 py-1.5 text-foreground font-mono text-xs mt-0.5"
       />
+    </div>
+  );
+}
+
+function TradeReasoningPanel({ tradeId }: { tradeId: string }) {
+  const reasoning = trpc.engine.tradeReasoning.useQuery(
+    { positionId: tradeId },
+    { refetchInterval: false }
+  );
+
+  const match = reasoning.data;
+
+  if (!match) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <Brain className="w-3 h-3 text-cyan" />
+        Bot Reasoning
+      </div>
+      <div className="text-xs font-mono bg-cyan/5 border border-cyan/20 p-2 space-y-1.5">
+        {/* Confluence score */}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Confluence</span>
+          <span className={`font-bold ${match.confluenceScore >= 70 ? 'text-bullish' : match.confluenceScore >= 50 ? 'text-warning' : 'text-bearish'}`}>
+            {match.confluenceScore}/100
+          </span>
+        </div>
+        {/* Session & Timeframe */}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Session</span>
+          <span className="text-foreground font-bold">{match.session}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Timeframe</span>
+          <span className="text-foreground">{match.timeframe}</span>
+        </div>
+        {/* Factors (concepts that triggered) */}
+        {match.factors && match.factors.length > 0 && (
+          <div>
+            <span className="text-muted-foreground text-[10px]">Concepts:</span>
+            <div className="space-y-1 mt-0.5">
+              {match.factors.filter(f => f.present).map((f, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="text-bullish text-[10px]">✓</span>
+                  <span className="text-[10px] text-cyan font-bold">{f.concept}</span>
+                  <span className="text-[10px] text-muted-foreground flex-1 truncate">{f.detail}</span>
+                  <span className="text-[10px] text-foreground">+{f.weight}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Summary */}
+        {match.summary && (
+          <div className="text-[10px] text-foreground/80 whitespace-pre-wrap mt-1 border-t border-border/30 pt-1">
+            {match.summary}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PostMortemPanel({ tradeId, status }: { tradeId: string; status: string }) {
+  const postMortems = trpc.engine.postMortems.useQuery(undefined, {
+    refetchInterval: false,
+  });
+
+  const match = useMemo(() => {
+    if (!postMortems.data) return null;
+    return postMortems.data.find((pm: any) => pm.positionId === tradeId);
+  }, [postMortems.data, tradeId]);
+
+  if (!match || status !== 'closed') return null;
+
+  const isWin = match.outcome === 'win';
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        {isWin ? <CheckCircle className="w-3 h-3 text-bullish" /> : <XCircle className="w-3 h-3 text-bearish" />}
+        Post-Mortem Analysis
+      </div>
+      <div className={`text-xs font-mono p-2 space-y-1.5 border ${
+        isWin ? 'bg-bullish/5 border-bullish/20' : 'bg-bearish/5 border-bearish/20'
+      }`}>
+        {/* Outcome */}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Outcome</span>
+          <span className={`font-bold ${isWin ? 'text-bullish' : 'text-bearish'}`}>
+            {match.outcome?.toUpperCase()}
+          </span>
+        </div>
+        {/* Exit reason */}
+        {match.exitReason && (
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Exit Reason</span>
+            <span className="text-foreground font-bold">{match.exitReason}</span>
+          </div>
+        )}
+        {/* Hold duration */}
+        {match.holdDuration && (
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Duration</span>
+            <span className="text-foreground">{match.holdDuration}</span>
+          </div>
+        )}
+        {/* P&L */}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">P&L</span>
+          <span className={`font-bold ${match.pnl >= 0 ? 'text-bullish' : 'text-bearish'}`}>
+            {match.pnl >= 0 ? '+' : ''}${match.pnl.toFixed(2)}
+          </span>
+        </div>
+        {/* What worked */}
+        {match.whatWorked && match.whatWorked.length > 0 && (
+          <div className="mt-1">
+            <span className="text-[10px] text-bullish font-bold">What worked:</span>
+            <ul className="text-[10px] text-foreground/80 mt-0.5 list-disc list-inside">
+              {match.whatWorked.map((item: string, i: number) => <li key={i}>{item}</li>)}
+            </ul>
+          </div>
+        )}
+        {/* What failed */}
+        {match.whatFailed && match.whatFailed.length > 0 && (
+          <div className="mt-1">
+            <span className="text-[10px] text-bearish font-bold">What failed:</span>
+            <ul className="text-[10px] text-foreground/80 mt-0.5 list-disc list-inside">
+              {match.whatFailed.map((item: string, i: number) => <li key={i}>{item}</li>)}
+            </ul>
+          </div>
+        )}
+        {/* Lesson learned */}
+        {match.lessonLearned && (
+          <div className="mt-1">
+            <span className="text-[10px] text-cyan font-bold">Lesson:</span>
+            <div className="text-[10px] text-foreground/80 mt-0.5">{match.lessonLearned}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

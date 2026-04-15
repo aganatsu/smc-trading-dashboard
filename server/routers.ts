@@ -29,6 +29,33 @@ import {
   setOwnerUserId, getLog as getPaperLog,
 } from "./paperTrading";
 import { getConfig, updateConfig, resetConfig, type BotConfig } from "./botConfig";
+import {
+  calculateCurrencyStrength,
+  calculateCorrelation,
+  detectSession,
+  calculatePDLevels,
+  detectJudasSwing,
+  calculatePremiumDiscount,
+  detectSwingPoints,
+  type CurrencyStrength,
+  type CorrelationPair,
+  type SessionInfo,
+  type PDLevels,
+  type JudasSwing,
+  type PremiumDiscount,
+  type Candle,
+} from "./smcAnalysis";
+import {
+  startEngine as startBotEngine,
+  stopEngine as stopBotEngine,
+  setAutoTrading,
+  getEngineState,
+  getTradeReasoning,
+  getPostMortems,
+  getLastScanResults,
+  triggerManualScan,
+  generatePostMortem,
+} from "./botEngine";
 
 export const appRouter = router({
   system: systemRouter,
@@ -547,6 +574,170 @@ export const appRouter = router({
 
     log: publicProcedure.query(() => {
       return getPaperLog();
+    }),
+  }),
+
+  // ── ICT Analysis Endpoints ──
+  ict: router({
+    currencyStrength: publicProcedure.query(async () => {
+      // Fetch quotes for all major pairs to compute currency strength
+      const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'GBP/JPY'];
+      const quotes: Record<string, { price: number; previousClose: number }> = {};
+      for (const pair of pairs) {
+        try {
+          const q = await fetchQuoteFromYahoo(pair);
+          quotes[pair] = { price: q.price, previousClose: q.previousClose };
+        } catch { /* skip unavailable pairs */ }
+      }
+      return calculateCurrencyStrength(quotes);
+    }),
+
+    correlations: publicProcedure.query(async () => {
+      // Fetch daily close prices for correlation calculation
+      const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'GBP/JPY'];
+      const priceData: Record<string, number[]> = {};
+      for (const pair of pairs) {
+        try {
+          const candles = await fetchCandlesFromYahoo(pair, '1day', 30);
+          priceData[pair] = candles.map(c => c.close);
+        } catch { /* skip */ }
+      }
+
+      const results: CorrelationPair[] = [];
+      const pairKeys = Object.keys(priceData);
+      for (let i = 0; i < pairKeys.length; i++) {
+        for (let j = i + 1; j < pairKeys.length; j++) {
+          const p1 = priceData[pairKeys[i]];
+          const p2 = priceData[pairKeys[j]];
+          if (p1 && p2) {
+            results.push({
+              pair1: pairKeys[i],
+              pair2: pairKeys[j],
+              coefficient: calculateCorrelation(p1, p2),
+            });
+          }
+        }
+      }
+      return results;
+    }),
+
+    sessionInfo: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const candles = await fetchCandlesFromYahoo(input.symbol, '1h', 50);
+          return detectSession(candles as Candle[]);
+        } catch {
+          return { name: 'Unknown', active: false, isKillZone: false, sessionHigh: 0, sessionLow: 0, sessionOpen: 0 };
+        }
+      }),
+
+    pdLevels: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const dailyCandles = await fetchCandlesFromYahoo(input.symbol, '1day', 30);
+          return calculatePDLevels(dailyCandles as Candle[]);
+        } catch {
+          return null;
+        }
+      }),
+
+    judasSwing: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const candles = await fetchCandlesFromYahoo(input.symbol, '1h', 50);
+          return detectJudasSwing(candles as Candle[]);
+        } catch {
+          return { detected: false, type: null, midnightOpen: 0, sweepLow: null, sweepHigh: null, reversalConfirmed: false, description: 'Data unavailable' };
+        }
+      }),
+
+    premiumDiscount: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const candles = await fetchCandlesFromYahoo(input.symbol, '4h', 100);
+          const swings = detectSwingPoints(candles as Candle[], 3);
+          return calculatePremiumDiscount(candles as Candle[], swings);
+        } catch {
+          return { swingHigh: 0, swingLow: 0, equilibrium: 0, currentZone: 'equilibrium' as const, zonePercent: 50, oteZone: false };
+        }
+      }),
+  }),
+
+  // ── Autonomous Bot Engine ──
+  engine: router({
+    state: publicProcedure.query(() => {
+      const engineState = getEngineState();
+      return {
+        running: engineState.running,
+        autoTrading: engineState.autoTrading,
+        scanInterval: engineState.scanInterval,
+        lastScanTime: engineState.lastScanTime,
+        totalScans: engineState.totalScans,
+        totalSignals: engineState.totalSignals,
+        totalTradesPlaced: engineState.totalTradesPlaced,
+        totalRejected: engineState.totalRejected,
+        postMortemCount: engineState.postMortems.length,
+      };
+    }),
+
+    start: protectedProcedure
+      .input(z.object({
+        autoTrade: z.boolean().default(true),
+        intervalSeconds: z.number().min(30).max(3600).default(60),
+      }))
+      .mutation(({ ctx, input }) => {
+        setOwnerUserId(ctx.user.id);
+        startBotEngine(input.autoTrade, input.intervalSeconds);
+        return { success: true };
+      }),
+
+    stop: protectedProcedure.mutation(() => {
+      stopBotEngine();
+      return { success: true };
+    }),
+
+    setAutoTrading: protectedProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(({ input }) => {
+        setAutoTrading(input.enabled);
+        return { success: true };
+      }),
+
+    manualScan: protectedProcedure.mutation(async () => {
+      await triggerManualScan();
+      return { success: true, scanResults: getLastScanResults().map(r => ({
+        symbol: r.symbol,
+        signal: r.signal,
+        confluenceScore: r.confluenceScore,
+        tradePlaced: r.tradePlaced,
+        rejectionReason: r.rejectionReason,
+        reasoning: r.reasoning,
+      })) };
+    }),
+
+    scanResults: publicProcedure.query(() => {
+      return getLastScanResults().map(r => ({
+        symbol: r.symbol,
+        signal: r.signal,
+        confluenceScore: r.confluenceScore,
+        tradePlaced: r.tradePlaced,
+        rejectionReason: r.rejectionReason,
+        reasoning: r.reasoning,
+      }));
+    }),
+
+    tradeReasoning: publicProcedure
+      .input(z.object({ positionId: z.string() }))
+      .query(({ input }) => {
+        return getTradeReasoning(input.positionId);
+      }),
+
+    postMortems: publicProcedure.query(() => {
+      return getPostMortems();
     }),
   }),
 });
