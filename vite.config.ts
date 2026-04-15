@@ -204,6 +204,9 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
     ],
+    // Disable HMR WebSocket — the proxy environment doesn't support it
+    // and the constant reconnect polling triggers 429 rate limits
+    hmr: false,
     fs: {
       strict: true,
       deny: ["**/.*"],
