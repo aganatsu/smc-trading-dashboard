@@ -16,15 +16,52 @@
  * - Trade-by-trade table with expandable reasoning
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   FlaskConical, Play, Loader2, TrendingUp, TrendingDown,
   BarChart3, Target, AlertTriangle, ChevronDown, ChevronRight,
   Trophy, Skull, Minus, Settings2, Shield, LogIn, LogOut,
   Clock, Zap, Calendar, ArrowUpDown, Filter, PieChart,
-  Crosshair, RotateCcw,
+  Crosshair, RotateCcw, Save, GitCompare, Trash2, X, Layers,
 } from "lucide-react";
+
+// ─── Saved Run Types ─────────────────────────────────────────────
+
+interface SavedRun {
+  id: string;
+  label: string;
+  savedAt: number; // timestamp
+  symbol: string;
+  timeframe: string;
+  lookbackMonths: number;
+  totalTrades: number;
+  winRate: number;
+  netProfitPercent: number;
+  profitFactor: number;
+  maxDrawdownPercent: number;
+  sharpeRatio: number;
+  expectancy: number;
+  averageRR: number;
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
+  longWinRate: number;
+  shortWinRate: number;
+  configSnapshot: { minConfluence: number; riskPerTrade: number; minRR: number; slMethod: string; tpMethod: string };
+}
+
+const STORAGE_KEY = "smc_backtest_saved_runs";
+
+function loadSavedRuns(): SavedRun[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function persistSavedRuns(runs: SavedRun[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(runs));
+}
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -186,12 +223,68 @@ export default function BacktestView() {
   );
   const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null);
 
+  // Comparison mode state
+  const [savedRuns, setSavedRuns] = useState<SavedRun[]>(() => loadSavedRuns());
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareA, setCompareA] = useState<string | null>(null);
+  const [compareB, setCompareB] = useState<string | null>(null);
+  const [saveLabel, setSaveLabel] = useState("");
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // Persist saved runs to localStorage
+  useEffect(() => { persistSavedRuns(savedRuns); }, [savedRuns]);
+
   const runBacktest = trpc.backtest.run.useMutation();
   const progress = trpc.backtest.progress.useQuery(undefined, {
     refetchInterval: runBacktest.isPending ? 500 : false,
   });
 
   const result = runBacktest.data;
+
+  const handleSaveRun = useCallback(() => {
+    if (!result || result.status !== "completed") return;
+    const label = saveLabel.trim() || `${result.symbol} ${result.timeframe} ${new Date().toLocaleString()}`;
+    const run: SavedRun = {
+      id: `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      label,
+      savedAt: Date.now(),
+      symbol: result.symbol,
+      timeframe: result.timeframe,
+      lookbackMonths,
+      totalTrades: result.totalTrades,
+      winRate: result.winRate,
+      netProfitPercent: result.netProfitPercent,
+      profitFactor: result.profitFactor,
+      maxDrawdownPercent: result.maxDrawdownPercent,
+      sharpeRatio: result.sharpeRatio,
+      expectancy: result.expectancy,
+      averageRR: result.averageRR,
+      maxConsecutiveWins: result.maxConsecutiveWins,
+      maxConsecutiveLosses: result.maxConsecutiveLosses,
+      longWinRate: result.longStats.winRate,
+      shortWinRate: result.shortStats.winRate,
+      configSnapshot: result.configSnapshot,
+    };
+    setSavedRuns(prev => [run, ...prev].slice(0, 20)); // Keep max 20 runs
+    setSaveLabel("");
+    setShowSaveDialog(false);
+  }, [result, saveLabel, lookbackMonths]);
+
+  const handleDeleteRun = useCallback((id: string) => {
+    setSavedRuns(prev => prev.filter(r => r.id !== id));
+    if (compareA === id) setCompareA(null);
+    if (compareB === id) setCompareB(null);
+  }, [compareA, compareB]);
+
+  const handleClearAllRuns = useCallback(() => {
+    setSavedRuns([]);
+    setCompareA(null);
+    setCompareB(null);
+    setCompareMode(false);
+  }, []);
+
+  const runA = useMemo(() => savedRuns.find(r => r.id === compareA) || null, [savedRuns, compareA]);
+  const runB = useMemo(() => savedRuns.find(r => r.id === compareB) || null, [savedRuns, compareB]);
 
   const toggleConfig = useCallback((id: string) => {
     setExpandedConfig(prev => {
@@ -236,6 +329,16 @@ export default function BacktestView() {
     setExit({ ...DEFAULT_EXIT });
     setSession({ ...DEFAULT_SESSION });
   };
+
+  // Toggle compare selection
+  const toggleCompareSelect = useCallback((id: string) => {
+    if (compareA === id) { setCompareA(null); return; }
+    if (compareB === id) { setCompareB(null); return; }
+    if (!compareA) { setCompareA(id); return; }
+    if (!compareB) { setCompareB(id); return; }
+    // Both slots full, replace B
+    setCompareB(id);
+  }, [compareA, compareB]);
 
   // Equity + drawdown chart data
   const chartData = useMemo(() => {
@@ -700,10 +803,213 @@ export default function BacktestView() {
                   {result.timeframe} · {result.totalBars} bars · {result.executionTimeMs}ms
                 </span>
               </div>
-              <div className={`text-lg font-bold font-mono ${result.netProfit >= 0 ? "text-bullish" : "text-bearish"}`}>
-                {result.netProfit >= 0 ? "+" : ""}{result.netProfitPercent.toFixed(1)}%
+              <div className="flex items-center gap-2">
+                <div className={`text-lg font-bold font-mono ${result.netProfit >= 0 ? "text-bullish" : "text-bearish"}`}>
+                  {result.netProfit >= 0 ? "+" : ""}{result.netProfitPercent.toFixed(1)}%
+                </div>
+                <button
+                  onClick={() => setShowSaveDialog(true)}
+                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-cyan border border-border hover:border-cyan px-2 py-1 transition-colors"
+                  title="Save this run for comparison"
+                >
+                  <Save className="w-3 h-3" /> Save Run
+                </button>
+                {savedRuns.length >= 2 && (
+                  <button
+                    onClick={() => setCompareMode(!compareMode)}
+                    className={`flex items-center gap-1 text-[10px] font-mono border px-2 py-1 transition-colors ${
+                      compareMode
+                        ? "text-cyan border-cyan bg-cyan/10"
+                        : "text-muted-foreground hover:text-cyan border-border hover:border-cyan"
+                    }`}
+                    title="Compare saved runs"
+                  >
+                    <GitCompare className="w-3 h-3" /> Compare
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* ── Save Dialog ── */}
+            {showSaveDialog && (
+              <div className="bg-card border border-cyan/30 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[10px] font-mono text-cyan uppercase tracking-wider font-bold">Save Current Run</div>
+                  <button onClick={() => setShowSaveDialog(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={saveLabel}
+                    onChange={e => setSaveLabel(e.target.value)}
+                    placeholder={`${result.symbol} ${result.timeframe} — describe this run...`}
+                    className="cfg-input flex-1"
+                    onKeyDown={e => e.key === "Enter" && handleSaveRun()}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveRun}
+                    className="bg-cyan text-background text-[10px] font-mono font-bold px-3 py-1.5 hover:opacity-90 transition-opacity"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Comparison Mode ── */}
+            {compareMode && (
+              <div className="bg-card border border-border">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+                  <div className="flex items-center gap-2">
+                    <GitCompare className="w-4 h-4 text-cyan" />
+                    <span className="text-sm font-bold font-mono text-foreground uppercase tracking-wider">Compare Runs</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">({savedRuns.length} saved)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleClearAllRuns}
+                      className="text-[9px] font-mono text-bearish/60 hover:text-bearish transition-colors"
+                    >
+                      Clear All
+                    </button>
+                    <button
+                      onClick={() => { setCompareMode(false); setCompareA(null); setCompareB(null); }}
+                      className="text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Saved runs list */}
+                <div className="px-4 py-2 space-y-1 max-h-48 overflow-y-auto">
+                  {savedRuns.length === 0 && (
+                    <div className="text-xs font-mono text-muted-foreground py-4 text-center">No saved runs yet. Run a backtest and click Save Run.</div>
+                  )}
+                  {savedRuns.map(run => {
+                    const isA = compareA === run.id;
+                    const isB = compareB === run.id;
+                    const isSelected = isA || isB;
+                    return (
+                      <div
+                        key={run.id}
+                        className={`flex items-center gap-2 p-2 border transition-colors cursor-pointer ${
+                          isSelected ? "border-cyan bg-cyan/5" : "border-border hover:border-muted-foreground"
+                        }`}
+                        onClick={() => toggleCompareSelect(run.id)}
+                      >
+                        <div className={`w-5 h-5 flex items-center justify-center text-[9px] font-bold font-mono border ${
+                          isA ? "bg-cyan text-background border-cyan" :
+                          isB ? "bg-purple-500 text-white border-purple-500" :
+                          "border-border text-muted-foreground"
+                        }`}>
+                          {isA ? "A" : isB ? "B" : ""}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-mono text-foreground truncate">{run.label}</div>
+                          <div className="text-[9px] font-mono text-muted-foreground">
+                            {run.symbol} · {run.timeframe} · {run.totalTrades} trades · {new Date(run.savedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className={`text-xs font-bold font-mono ${
+                          run.netProfitPercent >= 0 ? "text-bullish" : "text-bearish"
+                        }`}>
+                          {run.netProfitPercent >= 0 ? "+" : ""}{run.netProfitPercent.toFixed(1)}%
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteRun(run.id); }}
+                          className="text-muted-foreground hover:text-bearish transition-colors p-0.5"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Comparison table */}
+                {runA && runB && (
+                  <div className="px-4 pb-4 pt-2 border-t border-border/50">
+                    <div className="text-[10px] font-mono text-cyan uppercase tracking-wider font-bold mb-2">Side-by-Side Comparison</div>
+                    <table className="w-full text-xs font-mono">
+                      <thead>
+                        <tr className="border-b border-border text-[10px] text-muted-foreground uppercase tracking-wider">
+                          <th className="text-left py-1.5 px-2">Metric</th>
+                          <th className="text-right py-1.5 px-2">
+                            <span className="bg-cyan/20 text-cyan px-1.5 py-0.5 border border-cyan/30">A</span>
+                          </th>
+                          <th className="text-right py-1.5 px-2">
+                            <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 border border-purple-500/30">B</span>
+                          </th>
+                          <th className="text-right py-1.5 px-2">Delta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <CompareRow label="Net P&L %" a={runA.netProfitPercent} b={runB.netProfitPercent} fmt="pct" higherBetter />
+                        <CompareRow label="Win Rate" a={runA.winRate} b={runB.winRate} fmt="pct" higherBetter />
+                        <CompareRow label="Profit Factor" a={runA.profitFactor} b={runB.profitFactor} fmt="num" higherBetter />
+                        <CompareRow label="Max Drawdown" a={runA.maxDrawdownPercent} b={runB.maxDrawdownPercent} fmt="pct" higherBetter={false} />
+                        <CompareRow label="Sharpe Ratio" a={runA.sharpeRatio} b={runB.sharpeRatio} fmt="num" higherBetter />
+                        <CompareRow label="Expectancy" a={runA.expectancy} b={runB.expectancy} fmt="dollar" higherBetter />
+                        <CompareRow label="Avg R:R" a={runA.averageRR} b={runB.averageRR} fmt="num" higherBetter />
+                        <CompareRow label="Total Trades" a={runA.totalTrades} b={runB.totalTrades} fmt="int" />
+                        <CompareRow label="Max Consec W" a={runA.maxConsecutiveWins} b={runB.maxConsecutiveWins} fmt="int" higherBetter />
+                        <CompareRow label="Max Consec L" a={runA.maxConsecutiveLosses} b={runB.maxConsecutiveLosses} fmt="int" higherBetter={false} />
+                        <CompareRow label="Long WR" a={runA.longWinRate} b={runB.longWinRate} fmt="pct" higherBetter />
+                        <CompareRow label="Short WR" a={runA.shortWinRate} b={runB.shortWinRate} fmt="pct" higherBetter />
+                      </tbody>
+                    </table>
+
+                    {/* Config diff */}
+                    <div className="mt-3 text-[10px] font-mono text-cyan uppercase tracking-wider font-bold mb-1">Config Differences</div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(["minConfluence", "riskPerTrade", "minRR", "slMethod", "tpMethod"] as const).map(key => {
+                        const aVal = String(runA.configSnapshot[key]);
+                        const bVal = String(runB.configSnapshot[key]);
+                        const isDiff = aVal !== bVal;
+                        return (
+                          <div key={key} className={`p-1.5 border ${
+                            isDiff ? "border-warning/30 bg-warning/5" : "border-border bg-muted/10"
+                          }`}>
+                            <div className="text-[9px] text-muted-foreground uppercase">{key}</div>
+                            <div className="flex justify-between">
+                              <span className={`text-[10px] ${isDiff ? "text-cyan font-bold" : "text-foreground"}`}>{aVal}</span>
+                              <span className={`text-[10px] ${isDiff ? "text-purple-400 font-bold" : "text-foreground"}`}>{bVal}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Prompt to select */}
+                {(!runA || !runB) && savedRuns.length >= 2 && (
+                  <div className="px-4 pb-3 text-[10px] font-mono text-muted-foreground text-center">
+                    Click two runs above to compare them side-by-side
+                    {runA && !runB && " — select one more"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Saved Runs Badge (when not in compare mode) ── */}
+            {!compareMode && savedRuns.length > 0 && (
+              <div className="flex items-center gap-2 px-1">
+                <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {savedRuns.length} saved run{savedRuns.length !== 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={() => setCompareMode(true)}
+                  className="text-[10px] font-mono text-cyan hover:underline"
+                >
+                  Open Compare
+                </button>
+              </div>
+            )}
 
             {/* ── Key Metrics ── */}
             <ResultSection
@@ -1156,6 +1462,36 @@ function StatCard({ label, value, color }: { label: string; value: string; color
       <div className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">{label}</div>
       <div className={`text-xs font-bold font-mono ${color || "text-foreground"}`}>{value}</div>
     </div>
+  );
+}
+
+function CompareRow({ label, a, b, fmt, higherBetter }: {
+  label: string; a: number; b: number;
+  fmt: "pct" | "num" | "dollar" | "int";
+  higherBetter?: boolean;
+}) {
+  const delta = a - b;
+  const fmtVal = (v: number) => {
+    switch (fmt) {
+      case "pct": return `${v.toFixed(1)}%`;
+      case "dollar": return `$${v.toFixed(2)}`;
+      case "int": return String(Math.round(v));
+      default: return v.toFixed(2);
+    }
+  };
+  const deltaColor = higherBetter === undefined
+    ? "text-muted-foreground"
+    : (delta > 0 ? (higherBetter ? "text-bullish" : "text-bearish") : delta < 0 ? (higherBetter ? "text-bearish" : "text-bullish") : "text-muted-foreground");
+
+  return (
+    <tr className="border-b border-border/30 hover:bg-muted/10">
+      <td className="py-1.5 px-2 text-muted-foreground text-[10px]">{label}</td>
+      <td className="py-1.5 px-2 text-right text-foreground">{fmtVal(a)}</td>
+      <td className="py-1.5 px-2 text-right text-foreground">{fmtVal(b)}</td>
+      <td className={`py-1.5 px-2 text-right font-bold ${deltaColor}`}>
+        {delta > 0 ? "+" : ""}{fmtVal(delta)}
+      </td>
+    </tr>
   );
 }
 

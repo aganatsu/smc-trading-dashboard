@@ -211,4 +211,4 @@
 - [x] UI: trade-by-trade table with expandable rows showing entry reasoning (setups, confluence, bias, session)
 - [x] UI: config snapshot display showing exact parameters used for the run
 - [x] UI: loading state with progress bar during backtest execution
-- [ ] UI: comparison mode — save previous run results and compare side-by-side (future enhancement)
+- [x] UI: comparison mode — save runs to localStorage (max 20), A/B selection, side-by-side metric table with delta coloring, config diff display
