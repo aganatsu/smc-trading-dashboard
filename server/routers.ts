@@ -770,6 +770,59 @@ export const appRouter = router({
         timeframe: z.string(),
         initialBalance: z.number().min(100).max(10000000).default(10000),
         useCurrentConfig: z.boolean().default(true),
+        configOverrides: z.object({
+          strategy: z.object({
+            enableBOS: z.boolean().optional(),
+            enableCHoCH: z.boolean().optional(),
+            enableOB: z.boolean().optional(),
+            enableFVG: z.boolean().optional(),
+            enableLiquiditySweep: z.boolean().optional(),
+            minConfluenceScore: z.number().min(1).max(10).optional(),
+            htfBiasRequired: z.boolean().optional(),
+            premiumDiscountEnabled: z.boolean().optional(),
+            onlyBuyInDiscount: z.boolean().optional(),
+            onlySellInPremium: z.boolean().optional(),
+            liquiditySweepRequired: z.boolean().optional(),
+          }).optional(),
+          risk: z.object({
+            riskPerTrade: z.number().min(0.1).max(10).optional(),
+            maxDailyLoss: z.number().min(1).max(50).optional(),
+            maxDrawdown: z.number().min(0).max(100).optional(),
+            positionSizingMethod: z.enum(['fixed_lots', 'percent_risk', 'kelly']).optional(),
+            fixedLotSize: z.number().optional(),
+            maxOpenPositions: z.number().min(1).max(20).optional(),
+            minRiskReward: z.number().min(0.5).max(10).optional(),
+          }).optional(),
+          entry: z.object({
+            defaultOrderType: z.enum(['market', 'limit', 'stop']).optional(),
+            closeOnReverse: z.boolean().optional(),
+            cooldownMinutes: z.number().min(0).max(240).optional(),
+            pyramidingEnabled: z.boolean().optional(),
+          }).optional(),
+          exit: z.object({
+            takeProfitMethod: z.enum(['fixed_pips', 'rr_ratio', 'next_level', 'atr_multiple']).optional(),
+            fixedTPPips: z.number().optional(),
+            tpRRRatio: z.number().optional(),
+            stopLossMethod: z.enum(['fixed_pips', 'atr_based', 'structure', 'below_ob']).optional(),
+            fixedSLPips: z.number().optional(),
+            trailingStopEnabled: z.boolean().optional(),
+            trailingStopPips: z.number().optional(),
+            breakEvenEnabled: z.boolean().optional(),
+            breakEvenTriggerPips: z.number().optional(),
+            partialTPEnabled: z.boolean().optional(),
+            partialTPPercent: z.number().optional(),
+            partialTPLevel: z.number().optional(),
+            timeBasedExitEnabled: z.boolean().optional(),
+            maxHoldHours: z.number().optional(),
+          }).optional(),
+          sessions: z.object({
+            londonEnabled: z.boolean().optional(),
+            newYorkEnabled: z.boolean().optional(),
+            asianEnabled: z.boolean().optional(),
+            sydneyEnabled: z.boolean().optional(),
+            activeDays: z.record(z.string(), z.boolean()).optional(),
+          }).optional(),
+        }).optional(),
       }))
       .mutation(async ({ input }) => {
         const result = await runBacktest({
@@ -779,6 +832,7 @@ export const appRouter = router({
           timeframe: input.timeframe,
           initialBalance: input.initialBalance,
           useCurrentConfig: input.useCurrentConfig,
+          configOverrides: input.configOverrides as any,
         });
         return result;
       }),

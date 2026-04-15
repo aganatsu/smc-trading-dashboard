@@ -86,8 +86,28 @@ export interface BacktestResult {
   sharpeRatio: number;
   expectancy: number;        // Average $ per trade
 
-  // Equity curve
-  equityCurve: { bar: number; time: string; equity: number }[];
+  // Best / worst single trade
+  bestTrade: { pnl: number; pnlPercent: number; direction: string; exitReason: string } | null;
+  worstTrade: { pnl: number; pnlPercent: number; direction: string; exitReason: string } | null;
+
+  // Equity + drawdown curves
+  equityCurve: { bar: number; time: string; equity: number; drawdown: number; drawdownPercent: number }[];
+
+  // Monthly P&L breakdown
+  monthlyPnL: { month: string; pnl: number; trades: number; winRate: number }[];
+
+  // Setup distribution
+  setupDistribution: { factor: string; count: number; winRate: number }[];
+
+  // Exit reason distribution
+  exitDistribution: { reason: string; count: number; avgPnl: number }[];
+
+  // Long vs Short breakdown
+  longStats: { trades: number; winRate: number; pnl: number };
+  shortStats: { trades: number; winRate: number; pnl: number };
+
+  // Full config snapshot (all sections used)
+  fullConfigSnapshot: Record<string, any>;
 
   // Individual trades
   trades: BacktestTrade[];
@@ -263,7 +283,12 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
     maxConsecutiveWins: 0, maxConsecutiveLosses: 0,
     averageWin: 0, averageLoss: 0, averageRR: 0,
     sharpeRatio: 0, expectancy: 0,
-    equityCurve: [], trades: [],
+    bestTrade: null, worstTrade: null,
+    equityCurve: [], monthlyPnL: [], setupDistribution: [], exitDistribution: [],
+    longStats: { trades: 0, winRate: 0, pnl: 0 },
+    shortStats: { trades: 0, winRate: 0, pnl: 0 },
+    fullConfigSnapshot: {},
+    trades: [],
     totalBars: 0, barsAnalyzed: 0,
     executionTimeMs: Date.now() - startTime,
     status: "error", error,
@@ -296,7 +321,7 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
     let maxDrawdownPercent = 0;
 
     const trades: BacktestTrade[] = [];
-    const equityCurve: { bar: number; time: string; equity: number }[] = [];
+    const equityCurve: { bar: number; time: string; equity: number; drawdown: number; drawdownPercent: number }[] = [];
     let tradeId = 0;
     let openTrade: {
       id: number;
@@ -437,10 +462,14 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
 
       // Record equity curve every 5 bars
       if (i % 5 === 0) {
+        const curDD = peakBalance - balance;
+        const curDDPct = peakBalance > 0 ? (curDD / peakBalance) * 100 : 0;
         equityCurve.push({
           bar: i,
           time: currentCandle.datetime,
-          equity: balance, // Closed equity
+          equity: balance,
+          drawdown: curDD,
+          drawdownPercent: curDDPct,
         });
       }
 
@@ -543,10 +572,14 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
     }
 
     // Final equity point
+    const finalDD = peakBalance - balance;
+    const finalDDPct = peakBalance > 0 ? (finalDD / peakBalance) * 100 : 0;
     equityCurve.push({
       bar: totalBars - 1,
       time: candles[candles.length - 1].datetime,
       equity: balance,
+      drawdown: finalDD,
+      drawdownPercent: finalDDPct,
     });
 
     // Calculate statistics
@@ -573,7 +606,86 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
     const stdReturn = returns.length > 1
       ? Math.sqrt(returns.reduce((sum, r) => sum + (r - avgReturn) ** 2, 0) / (returns.length - 1))
       : 0;
-    const sharpeRatio = stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(252) : 0; // Annualized
+    const sharpeRatio = stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(252) : 0;
+
+    // Best / worst trade
+    const sortedByPnl = [...trades].sort((a, b) => b.pnl - a.pnl);
+    const bestTrade = sortedByPnl.length > 0
+      ? { pnl: sortedByPnl[0].pnl, pnlPercent: sortedByPnl[0].pnlPercent, direction: sortedByPnl[0].direction, exitReason: sortedByPnl[0].exitReason }
+      : null;
+    const worstTrade = sortedByPnl.length > 0
+      ? { pnl: sortedByPnl[sortedByPnl.length - 1].pnl, pnlPercent: sortedByPnl[sortedByPnl.length - 1].pnlPercent, direction: sortedByPnl[sortedByPnl.length - 1].direction, exitReason: sortedByPnl[sortedByPnl.length - 1].exitReason }
+      : null;
+
+    // Monthly P&L breakdown
+    const monthlyMap = new Map<string, { pnl: number; trades: number; wins: number }>();
+    for (const t of trades) {
+      const month = t.exitTime.slice(0, 7); // YYYY-MM
+      const entry = monthlyMap.get(month) || { pnl: 0, trades: 0, wins: 0 };
+      entry.pnl += t.pnl;
+      entry.trades++;
+      if (t.pnl > 0) entry.wins++;
+      monthlyMap.set(month, entry);
+    }
+    const monthlyPnL = Array.from(monthlyMap.entries()).map(([month, data]) => ({
+      month,
+      pnl: data.pnl,
+      trades: data.trades,
+      winRate: data.trades > 0 ? (data.wins / data.trades) * 100 : 0,
+    })).sort((a, b) => a.month.localeCompare(b.month));
+
+    // Setup distribution
+    const setupMap = new Map<string, { count: number; wins: number }>();
+    for (const t of trades) {
+      for (const factor of t.setupFactors) {
+        const entry = setupMap.get(factor) || { count: 0, wins: 0 };
+        entry.count++;
+        if (t.pnl > 0) entry.wins++;
+        setupMap.set(factor, entry);
+      }
+    }
+    const setupDistribution = Array.from(setupMap.entries()).map(([factor, data]) => ({
+      factor,
+      count: data.count,
+      winRate: data.count > 0 ? (data.wins / data.count) * 100 : 0,
+    })).sort((a, b) => b.count - a.count);
+
+    // Exit reason distribution
+    const exitMap = new Map<string, { count: number; totalPnl: number }>();
+    for (const t of trades) {
+      const entry = exitMap.get(t.exitReason) || { count: 0, totalPnl: 0 };
+      entry.count++;
+      entry.totalPnl += t.pnl;
+      exitMap.set(t.exitReason, entry);
+    }
+    const exitDistribution = Array.from(exitMap.entries()).map(([reason, data]) => ({
+      reason,
+      count: data.count,
+      avgPnl: data.count > 0 ? data.totalPnl / data.count : 0,
+    }));
+
+    // Long vs Short breakdown
+    const longTrades = trades.filter(t => t.direction === "long");
+    const shortTrades = trades.filter(t => t.direction === "short");
+    const longStats = {
+      trades: longTrades.length,
+      winRate: longTrades.length > 0 ? (longTrades.filter(t => t.pnl > 0).length / longTrades.length) * 100 : 0,
+      pnl: longTrades.reduce((s, t) => s + t.pnl, 0),
+    };
+    const shortStats = {
+      trades: shortTrades.length,
+      winRate: shortTrades.length > 0 ? (shortTrades.filter(t => t.pnl > 0).length / shortTrades.length) * 100 : 0,
+      pnl: shortTrades.reduce((s, t) => s + t.pnl, 0),
+    };
+
+    // Full config snapshot
+    const fullConfigSnapshot = JSON.parse(JSON.stringify({
+      strategy: config.strategy,
+      risk: config.risk,
+      entry: config.entry,
+      exit: config.exit,
+      sessions: config.sessions,
+    }));
 
     const result: BacktestResult = {
       symbol: btConfig.symbol,
@@ -607,7 +719,15 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
       averageRR: avgRR,
       sharpeRatio,
       expectancy: trades.length > 0 ? netProfit / trades.length : 0,
+      bestTrade,
+      worstTrade,
       equityCurve,
+      monthlyPnL,
+      setupDistribution,
+      exitDistribution,
+      longStats,
+      shortStats,
+      fullConfigSnapshot,
       trades,
       totalBars,
       barsAnalyzed: totalBars - lookback,

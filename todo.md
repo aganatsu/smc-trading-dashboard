@@ -189,3 +189,26 @@
 
 ## Bug Fixes
 - [x] Fix positionId type mismatch: engine.tradeReasoning expects string but receives number
+
+## Backtest Rebuild — Full Parameter Controls
+- [x] Backtest UI: add strategy parameter overrides (min confluence, enabled setups: BOS/CHoCH/OB/FVG/Liquidity, HTF bias required)
+- [x] Backtest UI: add risk parameter overrides (risk per trade %, max positions, min R:R)
+- [x] Backtest UI: add entry/exit rule overrides (SL method, TP method, trailing stop, break-even)
+- [x] Backtest UI: add session filter overrides (London/NY/Asian/Sydney toggles)
+- [x] Backtest UI: lookback period slider (1-24 months) instead of fixed 3-month window
+- [x] Backtest UI: "Dashboard Config" vs "Custom Override" toggle
+- [x] Backtest results: show parameter snapshot used, trade-by-trade breakdown with reasoning
+- [x] Server: accept full configOverrides in backtest.run route
+
+## Backtest Rebuild — Production-Grade
+- [x] Server: expand backtest.run configOverrides to accept ALL BotConfig parameters (strategy, risk, entry, exit, session, instruments)
+- [x] Server: add monthly P&L breakdown, consecutive wins/losses, avg win/loss size, best/worst trade to results
+- [x] Server: add drawdown curve data points alongside equity curve
+- [x] UI: full collapsible parameter sections — Strategy (setup toggles, confluence, HTF bias), Risk (risk%, max positions, min R:R), Entry/Exit (SL/TP methods, trailing, break-even), Session (kill zone toggles, day-of-week filter)
+- [x] UI: lookback period slider (1-24 months) with preset labels
+- [x] UI: "Dashboard Config" vs "Custom Override" toggle with LOCKED badges
+- [x] UI: results dashboard — KPI cards, equity+drawdown chart, monthly P&L heatmap, setup/exit distribution, long/short breakdown
+- [x] UI: trade-by-trade table with expandable rows showing entry reasoning (setups, confluence, bias, session)
+- [x] UI: config snapshot display showing exact parameters used for the run
+- [x] UI: loading state with progress bar during backtest execution
+- [ ] UI: comparison mode — save previous run results and compare side-by-side (future enhancement)

@@ -197,6 +197,22 @@
   .section-label {
     @apply text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground;
   }
+
+  /* Backtest config inputs */
+  .cfg-select {
+    @apply w-full bg-background border border-border text-foreground text-xs font-mono p-2;
+  }
+  .cfg-select:focus {
+    border-color: oklch(0.85 0.18 192);
+    outline: none;
+  }
+  .cfg-input {
+    @apply w-full bg-background border border-border text-foreground text-xs font-mono p-2;
+  }
+  .cfg-input:focus {
+    border-color: oklch(0.85 0.18 192);
+    outline: none;
+  }
 }
 
 @keyframes pulse-glow {
