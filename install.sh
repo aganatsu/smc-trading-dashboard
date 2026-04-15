@@ -41,9 +41,11 @@ echo -e "  ${GREEN}✓ Node.js $(node -v)${NC}"
 # Check npm/pnpm
 if command -v pnpm &> /dev/null; then
     PKG_MANAGER="pnpm"
+    INSTALL_CMD="pnpm install"
     echo -e "  ${GREEN}✓ pnpm $(pnpm -v)${NC}"
 elif command -v npm &> /dev/null; then
     PKG_MANAGER="npm"
+    INSTALL_CMD="npm install --legacy-peer-deps"
     echo -e "  ${GREEN}✓ npm $(npm -v)${NC}"
     echo -e "  ${YELLOW}  (pnpm recommended for faster installs: npm install -g pnpm)${NC}"
 else
@@ -55,7 +57,8 @@ fi
 
 echo ""
 echo -e "${YELLOW}[2/6] Installing dependencies...${NC}"
-$PKG_MANAGER install
+echo -e "  ${CYAN}Running: ${INSTALL_CMD}${NC}"
+$INSTALL_CMD
 echo -e "  ${GREEN}✓ Dependencies installed${NC}"
 
 # ─── Create .env File ───────────────────────────────────────────────
@@ -75,14 +78,18 @@ else
 # SMC Trading Dashboard — Environment Configuration
 # ─────────────────────────────────────────────────────────────────
 
-# ─── Database ────────────────────────────────────────────────────
-# Option 1: SQLite (default, no setup needed)
-# DATABASE_URL=file:./data/smc.db
-
-# Option 2: MySQL / TiDB (for production)
-# DATABASE_URL=mysql://user:password@localhost:3306/smc_trading
-
-# Option 3: Use an existing MySQL connection string
+# ─── Database (REQUIRED) ────────────────────────────────────────
+# You MUST set this before running the app.
+#
+# Option 1: Local MySQL
+#   DATABASE_URL=mysql://root:password@localhost:3306/smc_trading
+#
+# Option 2: TiDB Serverless (free tier — https://tidbcloud.com)
+#   DATABASE_URL=mysql://user:pass@gateway.tidbcloud.com:4000/smc?ssl={"rejectUnauthorized":true}
+#
+# Option 3: Docker MySQL
+#   docker run -d --name smc-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=smc_trading -p 3306:3306 mysql:8.0
+#   DATABASE_URL=mysql://root:password@localhost:3306/smc_trading
 DATABASE_URL=
 
 # ─── Authentication ─────────────────────────────────────────────
@@ -122,25 +129,33 @@ fi
 echo ""
 echo -e "${YELLOW}[4/6] Database setup...${NC}"
 
-if [ -z "${DATABASE_URL:-}" ] && grep -q "^DATABASE_URL=$" .env 2>/dev/null; then
+# Source the .env to check DATABASE_URL
+DB_URL=$(grep "^DATABASE_URL=" .env 2>/dev/null | cut -d= -f2- || true)
+
+if [ -z "$DB_URL" ]; then
     echo -e "  ${YELLOW}⚠ DATABASE_URL is empty in .env${NC}"
     echo -e "  ${YELLOW}  The app requires a MySQL/TiDB database.${NC}"
-    echo -e "  ${YELLOW}  Options:${NC}"
-    echo -e "  ${YELLOW}    1. Set DATABASE_URL in .env to your MySQL connection string${NC}"
-    echo -e "  ${YELLOW}    2. Use a free TiDB Serverless instance: https://tidbcloud.com${NC}"
-    echo -e "  ${YELLOW}    3. Use a local MySQL: mysql://root:password@localhost:3306/smc${NC}"
+    echo -e ""
+    echo -e "  ${CYAN}  Quickest option — Docker MySQL:${NC}"
+    echo -e "  ${NC}    docker run -d --name smc-mysql \\${NC}"
+    echo -e "  ${NC}      -e MYSQL_ROOT_PASSWORD=password \\${NC}"
+    echo -e "  ${NC}      -e MYSQL_DATABASE=smc_trading \\${NC}"
+    echo -e "  ${NC}      -p 3306:3306 mysql:8.0${NC}"
+    echo -e ""
+    echo -e "  ${CYAN}  Then set in .env:${NC}"
+    echo -e "  ${NC}    DATABASE_URL=mysql://root:password@localhost:3306/smc_trading${NC}"
     echo -e ""
     echo -e "  ${YELLOW}  After setting DATABASE_URL, run: ${PKG_MANAGER} run db:push${NC}"
 else
     echo -e "  ${GREEN}  Running database migrations...${NC}"
-    $PKG_MANAGER run db:push 2>/dev/null && echo -e "  ${GREEN}✓ Database schema applied${NC}" || echo -e "  ${YELLOW}⚠ Migration skipped (set DATABASE_URL first)${NC}"
+    $PKG_MANAGER run db:push 2>/dev/null && echo -e "  ${GREEN}✓ Database schema applied${NC}" || echo -e "  ${YELLOW}⚠ Migration failed — check your DATABASE_URL${NC}"
 fi
 
 # ─── Build ──────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${YELLOW}[5/6] Building application...${NC}"
-$PKG_MANAGER run build 2>/dev/null && echo -e "  ${GREEN}✓ Build complete${NC}" || echo -e "  ${YELLOW}⚠ Build skipped (will build on first run)${NC}"
+$PKG_MANAGER run build 2>/dev/null && echo -e "  ${GREEN}✓ Build complete${NC}" || echo -e "  ${YELLOW}⚠ Build skipped (will build on first dev run)${NC}"
 
 # ─── Done ───────────────────────────────────────────────────────────
 
@@ -151,14 +166,12 @@ echo -e "${CYAN}╔════════════════════�
 echo -e "║  ${GREEN}✓ Installation successful!${CYAN}                              ║"
 echo -e "╠══════════════════════════════════════════════════════════╣"
 echo -e "║                                                          ║"
-echo -e "║  ${NC}To start the dashboard:${CYAN}                                 ║"
-echo -e "║    ${NC}${PKG_MANAGER} run dev${CYAN}                                          ║"
+echo -e "║  ${NC}Next steps:${CYAN}                                             ║"
 echo -e "║                                                          ║"
-echo -e "║  ${NC}Then open: ${GREEN}http://localhost:3000${CYAN}                        ║"
-echo -e "║                                                          ║"
-echo -e "║  ${NC}Before first run, make sure to:${CYAN}                         ║"
-echo -e "║    ${NC}1. Set DATABASE_URL in .env${CYAN}                            ║"
-echo -e "║    ${NC}2. Run: ${PKG_MANAGER} run db:push${CYAN}                             ║"
+echo -e "║  ${NC}1. Set DATABASE_URL in .env${CYAN}                              ║"
+echo -e "║  ${NC}2. Run migrations: ${PKG_MANAGER} run db:push${CYAN}                    ║"
+echo -e "║  ${NC}3. Start the dashboard: ${PKG_MANAGER} run dev${CYAN}                   ║"
+echo -e "║  ${NC}4. Open: ${GREEN}http://localhost:3000${CYAN}                          ║"
 echo -e "║                                                          ║"
 echo -e "╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""

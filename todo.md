@@ -334,3 +334,8 @@
 - [x] Create README-INSTALL.md with step-by-step local setup instructions
 - [x] Package entire project as downloadable ZIP (493KB)
 - [x] Ensure app runs standalone without Manus OAuth (fallback to owner auth)
+
+## Bug Fixes (Post-Delivery)
+- [x] Fix npm ERESOLVE peer dependency conflict: made Manus plugins optional in vite.config.ts (graceful fallback)
+- [x] Update install.sh to use --legacy-peer-deps for npm
+- [x] Add .npmrc with legacy-peer-deps=true for npm users
