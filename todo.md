@@ -339,3 +339,15 @@
 - [x] Fix npm ERESOLVE peer dependency conflict: made Manus plugins optional in vite.config.ts (graceful fallback)
 - [x] Update install.sh to use --legacy-peer-deps for npm
 - [x] Add .npmrc with legacy-peer-deps=true for npm users
+
+## One-Click Installer
+- [x] Create start.command (macOS double-clickable launcher with ASCII art banner)
+- [x] Create start.bat (Windows double-clickable launcher)
+- [x] Create docker-compose.yml (MySQL + app bundled — zero config)
+- [x] Create Dockerfile for the app
+- [x] Create .dockerignore for fast builds
+- [x] Auto-detect Docker vs Node.js and choose best path
+- [x] Docker path: fully automatic (zero config, data persists in volume)
+- [x] Node.js path: guided database setup with paste prompt (one-time only)
+- [x] Auto-open browser after server starts
+- [x] Update README-INSTALL.md with one-click instructions

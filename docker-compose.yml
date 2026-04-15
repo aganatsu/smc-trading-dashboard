@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  # ─── MySQL Database ──────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: smctrading2024
+      MYSQL_DATABASE: smc_trading
+    ports:
+      - "3307:3306"  # Use 3307 to avoid conflicts with local MySQL
+    volumes:
+      - smc_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psmctrading2024"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ─── SMC Trading Dashboard App ───────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mysql://root:smctrading2024@db:3306/smc_trading
+      JWT_SECRET: ${JWT_SECRET:-auto-generated-secret-change-me-in-production}
+      OWNER_OPEN_ID: local-owner
+      OWNER_NAME: Trader
+      VITE_APP_TITLE: SMC Trading Dashboard
+      VITE_APP_ID: smc-local
+      STANDALONE_MODE: "true"
+      PORT: "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  smc_mysql_data:

@@ -4,128 +4,109 @@ A production-grade Smart Money Concepts (SMC/ICT) trading analysis platform with
 
 ---
 
-## Prerequisites
+## One-Click Start (Recommended)
 
-| Requirement | Version | Notes |
-|---|---|---|
-| **Node.js** | 18+ | [Download](https://nodejs.org/) |
-| **pnpm** | 8+ | `npm install -g pnpm` (recommended) or use npm |
-| **MySQL** | 8.0+ | Or TiDB Serverless (free tier) |
+### macOS
+1. Extract the ZIP
+2. Double-click **`start.command`**
+3. The dashboard opens in your browser automatically
 
----
+### Windows
+1. Extract the ZIP
+2. Double-click **`start.bat`**
+3. The dashboard opens in your browser automatically
 
-## Quick Start
+### What Happens Automatically
 
-```bash
-# 1. Extract the ZIP and enter the directory
-unzip smc-trading-dashboard.zip
-cd smc-trading-dashboard
+The launcher detects your environment and chooses the best path:
 
-# 2. Run the automated installer
-chmod +x install.sh
-./install.sh
-
-# 3. Configure your database (edit .env)
-#    Set DATABASE_URL to your MySQL connection string
-nano .env
-
-# 4. Run database migrations
-pnpm run db:push
-
-# 5. Start the dashboard
-pnpm run dev
-
-# 6. Open in browser
-open http://localhost:3000
-```
+| Environment | What Happens |
+|---|---|
+| **Docker installed** | Spins up MySQL + app containers, runs migrations, opens browser. Zero config. |
+| **Node.js only** | Installs deps, creates `.env`, asks for a database URL (one-time), runs migrations, opens browser. |
+| **Neither** | Shows install links for Docker Desktop or Node.js. |
 
 ---
 
-## Manual Setup (Step by Step)
+## Docker Compose (Fully Automatic)
 
-### 1. Install Dependencies
+If you have [Docker Desktop](https://docker.com/products/docker-desktop) installed, the one-click launcher handles everything. You can also run it manually:
 
 ```bash
-pnpm install
+# Start everything (MySQL + app)
+docker compose up -d
+
+# View logs
+docker compose logs -f app
+
+# Stop everything
+docker compose down
+
+# Stop and remove all data
+docker compose down -v
 ```
 
-### 2. Create Environment File
+Data persists in a Docker volume and survives restarts.
 
-Copy the example below into a `.env` file at the project root:
+---
 
-```env
-# Database (required)
-DATABASE_URL=mysql://user:password@localhost:3306/smc_trading
+## Database Options (Node.js Path Only)
 
-# Authentication
-JWT_SECRET=your-random-secret-here-at-least-32-chars
-OWNER_OPEN_ID=local-owner
-OWNER_NAME=Trader
+If you don't have Docker, you need a MySQL connection string. Choose one:
 
-# App Settings
-VITE_APP_TITLE=SMC Trading Dashboard
-VITE_APP_ID=smc-local
-PORT=3000
-STANDALONE_MODE=true
-```
+### Option A: Free TiDB Serverless (Easiest — No Install)
+1. Go to [tidbcloud.com/free-trial](https://tidbcloud.com/free-trial)
+2. Sign up with GitHub or Google (no credit card required)
+3. Create a **Serverless** cluster (free: 5GB storage, 50M requests/month)
+4. Go to **Connect** and copy the connection string
+5. Paste it when the launcher asks
 
-**Generate a JWT secret:**
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-### 3. Database Setup
-
-The app uses MySQL (or TiDB). You have several options:
-
-**Option A: Local MySQL**
-```bash
-mysql -u root -p -e "CREATE DATABASE smc_trading;"
-# Set DATABASE_URL=mysql://root:yourpassword@localhost:3306/smc_trading
-```
-
-**Option B: TiDB Serverless (Free)**
-1. Sign up at [tidbcloud.com](https://tidbcloud.com)
-2. Create a Serverless cluster
-3. Copy the connection string to `DATABASE_URL`
-4. Add `?ssl={"rejectUnauthorized":true}` to the connection string
-
-**Option C: Docker MySQL**
+### Option B: Local MySQL via Docker (One Command)
 ```bash
 docker run -d --name smc-mysql \
   -e MYSQL_ROOT_PASSWORD=password \
   -e MYSQL_DATABASE=smc_trading \
   -p 3306:3306 \
   mysql:8.0
-# Set DATABASE_URL=mysql://root:password@localhost:3306/smc_trading
 ```
+Connection string: `mysql://root:password@localhost:3306/smc_trading`
 
-### 4. Run Migrations
+### Option C: Any Existing MySQL Server
+Use your connection string: `mysql://user:pass@host:3306/database_name`
+
+---
+
+## Manual Setup (If One-Click Doesn't Work)
 
 ```bash
-pnpm run db:push
+# 1. Install dependencies
+npm install --legacy-peer-deps
+
+# 2. Create .env file (copy from below)
+# 3. Set DATABASE_URL in .env
+# 4. Run migrations
+npm run db:push
+
+# 5. Start the dashboard
+npm run dev
+
+# 6. Open http://localhost:3000
 ```
 
-This creates all required tables: `users`, `trades`, `broker_connections`, `bot_configs`, `trade_reasonings`, `trade_post_mortems`, `user_settings`, `paper_accounts`, `paper_positions`, `paper_trade_history`.
+### .env Template
 
-### 5. Start the Application
-
-**Development mode** (with hot reload):
-```bash
-pnpm run dev
+```env
+DATABASE_URL=mysql://user:password@localhost:3306/smc_trading
+JWT_SECRET=your-random-secret-here-at-least-32-chars
+OWNER_OPEN_ID=local-owner
+OWNER_NAME=Trader
+VITE_APP_TITLE=SMC Trading Dashboard
+VITE_APP_ID=smc-local
+PORT=3000
+STANDALONE_MODE=true
 ```
 
-**Production mode**:
-```bash
-pnpm run build
-node dist/index.js
-```
-
-### 6. Access the Dashboard
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-In standalone mode, you are automatically authenticated as the owner — no login required.
+Generate a JWT secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ---
 
@@ -173,15 +154,6 @@ The bot autonomously scans all enabled instruments using SMC analysis:
 - Results: equity curve, drawdown, monthly P&L, trade-by-trade breakdown
 - **Comparison mode**: Save up to 20 runs, A/B side-by-side comparison
 
-### ICT Analysis
-
-- **Session Map**: 24h timeline with London/NY/Asian/Sydney kill zones
-- **Currency Strength**: Ranked bar chart with strongest/weakest summary
-- **Correlation Matrix**: 8x8 color-coded grid
-- **PD/PW Levels**: Previous Day/Week high/low/open/close price ladder
-- **Judas Swing**: False breakout detection at session opens
-- **Premium/Discount**: Zone indicator with OTE and equilibrium
-
 ### Real-Time Data
 
 - **WebSocket price feed**: Server broadcasts live quotes to all connected clients
@@ -194,21 +166,26 @@ The bot autonomously scans all enabled instruments using SMC analysis:
 ## Broker Setup (Optional)
 
 ### OANDA
-
 1. Create an OANDA practice account at [oanda.com](https://www.oanda.com)
 2. Generate an API key from your account settings
-3. In the dashboard, go to **Settings > Broker Connection**
-4. Enter your API key and account ID
-5. Click **Test Connection**
+3. In the dashboard: **Settings > Broker Connection** > enter API key + account ID
 
 ### MetaApi (HFM, IC Markets, etc.)
-
 1. Sign up at [metaapi.cloud](https://metaapi.cloud)
 2. Connect your MT4/MT5 account
-3. Copy your MetaApi token and account ID
-4. In the dashboard, go to **Settings > Broker Connection**
-5. Enter your token and account ID
-6. Click **Test Connection**
+3. In the dashboard: **Settings > Broker Connection** > enter token + account ID
+
+---
+
+## Docker Compose Commands
+
+```bash
+docker compose up -d          # Start everything
+docker compose logs -f app    # View app logs
+docker compose down           # Stop everything
+docker compose down -v        # Stop + delete all data
+docker compose up -d --build  # Rebuild after code changes
+```
 
 ---
 
@@ -221,7 +198,7 @@ The bot autonomously scans all enabled instruments using SMC analysis:
 | `3` | Bot view |
 | `4` | Journal view |
 | `5` | Settings view |
-| `C` | Toggle chart panel (full-screen chart) |
+| `C` | Toggle chart panel |
 | `/` | Focus sidebar filter |
 | `Esc` | Close dialogs |
 
@@ -230,70 +207,24 @@ The bot autonomously scans all enabled instruments using SMC analysis:
 ## Running Tests
 
 ```bash
-# Run all tests
-pnpm test
-
-# Run specific test file
-pnpm test server/paperTrading.test.ts
-
-# Run with verbose output
-pnpm test -- --reporter=verbose
-```
-
-The test suite includes **259 tests** across **17 test files** covering:
-- Paper trading engine (orders, positions, SL/TP, pending orders)
-- Bot configuration (load/save/validate)
-- Backtest engine (spread/slippage, results)
-- Live execution (safety guards, kill switch, position limits)
-- WebSocket price feed (subscribe/unsubscribe, broadcast)
-- Market data, fundamentals, broker connections, notifications, settings
-
----
-
-## Project Structure
-
-```
-client/
-  src/
-    pages/          ← View components (Dashboard, Chart, Bot, Journal, Settings)
-    components/     ← Reusable UI (AppShell, charts, dialogs)
-    hooks/          ← Custom hooks (useWebSocketPrices)
-server/
-  paperTrading.ts   ← Paper trading engine
-  botEngine.ts      ← Autonomous SMC bot
-  botConfig.ts      ← Bot configuration management
-  backtest.ts       ← Backtesting engine
-  liveExecution.ts  ← Live broker execution bridge
-  wsPriceFeed.ts    ← WebSocket price feed server
-  fundamentals.ts   ← Economic calendar
-  notifications.ts  ← Config-aware notification system
-  brokers/          ← OANDA + MetaApi integrations
-  _core/            ← Framework (auth, tRPC, Vite, LLM)
-drizzle/
-  schema.ts         ← Database schema (10 tables)
+npm test                                  # Run all 259 tests
+npm test -- server/paperTrading.test.ts   # Run specific file
+npm test -- --reporter=verbose            # Verbose output
 ```
 
 ---
 
 ## Troubleshooting
 
-**"Cannot connect to database"**
-- Verify `DATABASE_URL` in `.env` is correct
-- For TiDB: ensure SSL is enabled in the connection string
-- For local MySQL: ensure the database exists and MySQL is running
-
-**"Port 3000 already in use"**
-- Change `PORT` in `.env` to another port (e.g., 3001)
-- Or kill the process: `lsof -ti:3000 | xargs kill`
-
-**"Module not found" errors**
-- Run `pnpm install` again
-- Delete `node_modules` and reinstall: `rm -rf node_modules && pnpm install`
-
-**WebSocket connection fails**
-- The WS server runs on the same port as the HTTP server
-- Ensure no proxy is blocking WebSocket upgrades
-- Check browser console for connection errors
+| Problem | Solution |
+|---|---|
+| `ERESOLVE unable to resolve dependency tree` | Run `npm install --legacy-peer-deps` |
+| `Cannot connect to database` | Check `DATABASE_URL` in `.env`. For TiDB, ensure SSL is enabled. |
+| `Port 3000 already in use` | Change `PORT` in `.env` or run `lsof -ti:3000 \| xargs kill` |
+| Docker: `port 3307 already in use` | Change MySQL port in `docker-compose.yml` |
+| `Module not found` errors | Delete `node_modules` and reinstall |
+| WebSocket connection fails | Ensure no proxy blocks WS upgrades |
+| Page is blank after start | Wait 10-15s for Vite to compile |
 
 ---
 
