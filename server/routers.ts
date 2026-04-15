@@ -750,7 +750,7 @@ export const appRouter = router({
     }),
 
     tradeReasoning: publicProcedure
-      .input(z.object({ positionId: z.string() }))
+      .input(z.object({ positionId: z.union([z.string(), z.number()]).transform(v => String(v)) }))
       .query(({ input }) => {
         return getTradeReasoning(input.positionId);
       }),

@@ -304,9 +304,9 @@ export default function JournalView() {
                   </div>
                 )}
                 {/* Trade Reasoning from Bot Engine */}
-                <TradeReasoningPanel tradeId={selectedTrade.id} />
+                <TradeReasoningPanel tradeId={String(selectedTrade.id)} />
                 {/* Post-Mortem Analysis */}
-                <PostMortemPanel tradeId={selectedTrade.id} status={selectedTrade.status} />
+                <PostMortemPanel tradeId={String(selectedTrade.id)} status={selectedTrade.status} />
               </div>
             )}
           </div>

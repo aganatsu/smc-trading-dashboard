@@ -186,3 +186,6 @@
 ### Testing Gaps
 - [x] Vitest tests for autonomous engine routes (engine.state, engine.start, engine.stop, engine.manualScan, engine.scanResults, engine.tradeReasoning, engine.postMortems) — 31 tests
 - [x] Vitest tests for post-mortem generation on SL/TP closures
+
+## Bug Fixes
+- [x] Fix positionId type mismatch: engine.tradeReasoning expects string but receives number
