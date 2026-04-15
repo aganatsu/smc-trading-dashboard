@@ -387,3 +387,10 @@
 - [x] Fix fundamentals test assertion (affectedPairs can be empty for exotic currencies)
 - [x] Fix botConfigRoutes test timeout (15s for network-dependent test)
 - [x] All 259 tests passing across 17 test files
+
+## Bug Fixes (Current Session)
+- [x] Fix flickering issue in the preview/app UI (better-sqlite3 was rebuilt for Electron, broke Node.js dev server)
+- [x] Fix auth redirect loop when running locally without OAuth server (standalone mode)
+- [x] Update install.sh for SQLite standalone mode (no MySQL/DATABASE_URL needed)
+- [x] Server auto-creates 'local-owner' user when OWNER_OPEN_ID is not set
+- [x] context.ts detects standalone mode when OAUTH_SERVER_URL is missing

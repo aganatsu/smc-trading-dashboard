@@ -78,16 +78,28 @@ async function startServer() {
 
     // Auto-restore paper trading state for the owner
     try {
-      if (ENV.ownerOpenId) {
-        const owner = await getUserByOpenId(ENV.ownerOpenId);
-        if (owner) {
-          setOwnerUserId(owner.id);
-          const restored = await restoreFromDb(owner.id);
-          if (restored) {
-            console.log('[Startup] Paper trading state restored from DB');
-          } else {
-            console.log('[Startup] No saved paper trading state found — starting fresh');
-          }
+      const ownerOpenId = ENV.ownerOpenId || 'local-owner';
+      let owner = await getUserByOpenId(ownerOpenId);
+      
+      // In local/standalone mode, ensure the owner user exists
+      if (!owner) {
+        const { upsertUser } = await import('../db');
+        await upsertUser({
+          openId: ownerOpenId,
+          name: ENV.ownerOpenId ? 'Owner' : 'Local User',
+          role: 'admin',
+          lastSignedIn: new Date(),
+        });
+        owner = await getUserByOpenId(ownerOpenId);
+      }
+      
+      if (owner) {
+        setOwnerUserId(owner.id);
+        const restored = await restoreFromDb(owner.id);
+        if (restored) {
+          console.log('[Startup] Paper trading state restored from DB');
+        } else {
+          console.log('[Startup] No saved paper trading state found — starting fresh');
         }
       }
     } catch (err) {

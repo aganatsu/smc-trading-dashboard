@@ -11,23 +11,35 @@ export type TrpcContext = {
 };
 
 /**
- * Ensures the owner user exists in the database and returns it.
- * This is used as a fallback when no auth cookie is present,
- * making the app work without login for single-user mode.
+ * Determines if we're running in standalone/local mode.
+ * Standalone mode is active when:
+ * - STANDALONE_MODE env is explicitly set to 'true', OR
+ * - OAUTH_SERVER_URL is not configured (no auth server available)
+ */
+function isStandaloneMode(): boolean {
+  if (process.env.STANDALONE_MODE === 'true') return true;
+  if (!ENV.oAuthServerUrl) return true;
+  return false;
+}
+
+/**
+ * Ensures a local owner user exists in the database and returns it.
+ * Used in standalone mode (Electron / local dev without OAuth).
+ * Creates a default "local-owner" user if OWNER_OPEN_ID is not set.
  */
 let cachedOwnerUser: User | null = null;
 
 async function getOrCreateOwnerUser(): Promise<User | null> {
   if (cachedOwnerUser) return cachedOwnerUser;
 
-  const ownerOpenId = ENV.ownerOpenId;
-  if (!ownerOpenId) return null;
+  // Use OWNER_OPEN_ID if available, otherwise create a default local owner
+  const ownerOpenId = ENV.ownerOpenId || "local-owner";
 
   try {
     // Ensure the owner user exists
     await upsertUser({
       openId: ownerOpenId,
-      name: "Owner",
+      name: ENV.ownerOpenId ? "Owner" : "Local User",
       role: "admin",
       lastSignedIn: new Date(),
     });
@@ -48,8 +60,8 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
-  // In standalone mode (Electron), skip OAuth entirely — always use owner
-  if (process.env.STANDALONE_MODE === 'true') {
+  // In standalone mode (Electron or local without OAuth), skip OAuth entirely — always use owner
+  if (isStandaloneMode()) {
     user = await getOrCreateOwnerUser();
   } else {
     try {
