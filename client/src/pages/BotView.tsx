@@ -3,6 +3,8 @@ import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import BotConfigPanel from '@/components/BotConfigPanel';
+import FOTSIMeter from '@/components/FOTSIMeter';
+import FOTSIConfigPanel from '@/components/FOTSIConfigPanel';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -63,6 +65,10 @@ export default function BotView() {
   const engineAutoTradeMut = trpc.engine.setAutoTrading.useMutation({ onSuccess: () => engineState.refetch() });
   const engineManualScanMut = trpc.engine.manualScan.useMutation({ onSuccess: () => { engineState.refetch(); scanResults.refetch(); } });
   const [engineInterval, setEngineInterval] = useState(60);
+
+  // Bot selector
+  const [activeBot, setActiveBot] = useState<'smc' | 'fotsi'>('smc');
+  const [showFOTSIConfig, setShowFOTSIConfig] = useState(false);
 
   // Order form state
   const [symbol, setSymbol] = useState('EUR/USD');
@@ -153,6 +159,32 @@ export default function BotView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* ═══ BOT SELECTOR TABS ═══ */}
+      <div className="flex items-center gap-0 border-b border-border bg-card/30 flex-shrink-0">
+        <button
+          onClick={() => setActiveBot('smc')}
+          className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2 ${
+            activeBot === 'smc'
+              ? 'text-cyan-400 border-cyan-400 bg-card/50'
+              : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-card/20'
+          }`}
+        >
+          Bot #1 — SMC Confluence
+        </button>
+        <button
+          onClick={() => setActiveBot('fotsi')}
+          className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2 ${
+            activeBot === 'fotsi'
+              ? 'text-purple-400 border-purple-400 bg-card/50'
+              : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-card/20'
+          }`}
+        >
+          Bot #2 — FOTSI Mean Reversion
+        </button>
+        <div className="flex-1" />
+        <FOTSIMeter collapsed={true} />
+      </div>
+
       {/* ═══ TOP BAR ═══ */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 flex-shrink-0 gap-2 flex-wrap">
         {/* Left: Controls */}
@@ -188,7 +220,7 @@ export default function BotView() {
           <button onClick={() => setShowOrderForm(!showOrderForm)} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider rounded transition">
             + Order
           </button>
-          <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+          <button onClick={() => activeBot === 'fotsi' ? setShowFOTSIConfig(true) : setShowConfig(true)} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs uppercase tracking-wider rounded transition">
             ⚙ Config
           </button>
         </div>
@@ -549,6 +581,12 @@ export default function BotView() {
 
         {/* RIGHT: Account Summary + Strategy Performance (~35%) */}
         <div className="flex-[1] flex flex-col overflow-auto min-w-[280px]">
+          {/* FOTSI Meter — shown when Bot #2 is active */}
+          {activeBot === 'fotsi' && (
+            <div className="p-3 border-b border-border">
+              <FOTSIMeter />
+            </div>
+          )}
           {/* Account Summary */}
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Account Summary</h3>
@@ -821,6 +859,9 @@ export default function BotView() {
 
       {/* Bot Config Modal */}
       {showConfig && <BotConfigPanel onClose={() => setShowConfig(false)} />}
+
+      {/* FOTSI Config Modal */}
+      <FOTSIConfigPanel open={showFOTSIConfig} onClose={() => setShowFOTSIConfig(false)} />
 
       {/* ═══ KILL SWITCH BANNER ═══ */}
       {d.killSwitchActive && (

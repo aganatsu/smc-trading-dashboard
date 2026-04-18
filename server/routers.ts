@@ -77,6 +77,11 @@ import { getFundamentalsData, getEventsForPair, hasUpcomingHighImpact } from "./
 import { runBacktest, getBacktestProgress, getLastBacktestResult } from "./backtest";
 import { getLiveBrokerStatus, setActiveBrokerConnection, getActiveBrokerConnectionId } from "./liveExecution";
 import { getConnectedClientCount, getAllLatestPrices } from "./wsPriceFeed";
+import {
+  computeFOTSI, getCachedFOTSI, clearFOTSICache,
+  getFOTSIConfig, updateFOTSIConfig, resetFOTSIConfig,
+  type FOTSIBotConfig,
+} from "./fotsiEngine";
 
 export const appRouter = router({
   system: systemRouter,
@@ -1033,6 +1038,65 @@ export const appRouter = router({
         await upsertUserSettings(ctx.user.id, { preferencesJson: input });
         return { success: true };
       }),
+  }),
+
+  // ─── FOTSI Bot #2 ─────────────────────────────────────────────────
+  fotsi: router({
+    // Compute or return cached FOTSI strengths
+    strengths: protectedProcedure
+      .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        return computeFOTSI(input?.forceRefresh ?? false);
+      }),
+
+    // Quick cached result (no recompute)
+    cached: protectedProcedure.query(() => {
+      return getCachedFOTSI();
+    }),
+
+    // Bot #2 config
+    config: router({
+      get: protectedProcedure.query(() => {
+        return getFOTSIConfig();
+      }),
+      update: protectedProcedure
+        .input(z.object({
+          enabled: z.boolean().optional(),
+          minDivergenceSpread: z.number().optional(),
+          hookRequired: z.boolean().optional(),
+          hookBars: z.number().optional(),
+          minExtremeLevel: z.number().optional(),
+          riskPerTrade: z.number().optional(),
+          maxConcurrent: z.number().optional(),
+          cooldownMinutes: z.number().optional(),
+          maxDailyLoss: z.number().optional(),
+          maxDailyTrades: z.number().optional(),
+          slMethod: z.enum(['structure', 'atr', 'fixed']).optional(),
+          slATRMultiplier: z.number().optional(),
+          slFixedPips: z.number().optional(),
+          minRR: z.number().optional(),
+          tp1Method: z.enum(['ema50', 'fixed_rr']).optional(),
+          tp2Method: z.enum(['ema100', 'fixed_rr']).optional(),
+          tp1RR: z.number().optional(),
+          tp2RR: z.number().optional(),
+          partialClosePercent: z.number().optional(),
+          maxHoldHours: z.number().optional(),
+          breakEvenAfterTP1: z.boolean().optional(),
+          sessions: z.object({
+            london: z.boolean().optional(),
+            newYork: z.boolean().optional(),
+            asian: z.boolean().optional(),
+            sydney: z.boolean().optional(),
+          }).optional(),
+          entryTimeframe: z.enum(['1h', '4h']).optional(),
+        }))
+        .mutation(({ input }) => {
+          return updateFOTSIConfig(input as Partial<FOTSIBotConfig>);
+        }),
+      reset: protectedProcedure.mutation(() => {
+        return resetFOTSIConfig();
+      }),
+    }),
   }),
 
   // ─── WebSocket Price Feed Status ───────────────────────────────────

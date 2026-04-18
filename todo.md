@@ -395,3 +395,29 @@
 - [x] Server auto-creates 'local-owner' user when OWNER_OPEN_ID is not set
 - [x] context.ts detects standalone mode when OAUTH_SERVER_URL is missing
 - [x] Fix flashing/flickering issue in Manus preview app (reduced polling intervals, capped WS reconnects, removed aggressive health check)
+- [ ] Fix: Bot trades not being sent to MetaTrader API broker connection
+- [ ] Verify live execution bridge routes trades to MetaApi when in LIVE mode with active broker
+
+## Bot #2 — FOTSI Mean Reversion (Magala Strategy)
+
+### Edge Function (Supabase)
+- [x] Create bot-scanner-fotsi Edge Function (Magala-style mean reversion)
+- [x] FOTSI pair discovery by TSI divergence (28-pair aggregation)
+- [x] Hook detection with strength grading (strong/moderate/weak)
+- [x] EMA 50/100 TP targets with R:R-based fallback
+- [x] ATR/structure/fixed SL methods
+- [x] Session filtering, cooldown, daily loss limit, max concurrent
+- [x] Partial TP at TP1 with break-even after
+- [x] Tagged bot_id='fotsi_mr' in signal_reason JSON
+- [x] Add bot_id column to scan_logs migration
+- [x] Commit and push to GitHub
+
+### Dashboard Integration (webdev)
+- [x] Add FOTSI computation module (server-side TSI calculator)
+- [x] Add Bot #2 tRPC routes (fotsi.strengths, fotsi.cached, fotsi.config.get/update/reset)
+- [x] FOTSI Currency Strength Meter component (8-currency bar chart with OB/OS zones, sparklines, ranked pairs)
+- [x] Bot #2 Config Panel (divergence, risk, SL/TP, sessions — 4 tabbed sections)
+- [x] Bot Selector tabs in BotView (Bot #1: SMC Confluence / Bot #2: FOTSI Mean Reversion)
+- [ ] Bot #2 positions view (filtered by bot_id in signalReason) — shared positions table, filter pending
+- [x] Bot #2 scan results display (ranked pairs table with direction, TSI values, spread, hook score)
+- [x] Write vitest tests for FOTSI engine (14 tests — constants, config CRUD, cache, sessions merge)
