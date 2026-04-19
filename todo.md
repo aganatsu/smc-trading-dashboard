@@ -421,3 +421,11 @@
 - [ ] Bot #2 positions view (filtered by bot_id in signalReason) — shared positions table, filter pending
 - [x] Bot #2 scan results display (ranked pairs table with direction, TSI values, spread, hook score)
 - [x] Write vitest tests for FOTSI engine (14 tests — constants, config CRUD, cache, sessions merge)
+
+## Config Preset System
+- [x] Create config_presets Supabase table (SQL migration)
+- [x] Add preset CRUD endpoints to bot-config Edge Function (list, save, delete)
+- [x] Upgrade hardcoded Quick Presets to full config snapshots
+- [x] Add Save Preset UI (button + name/description dialog)
+- [x] Add My Presets section with load/delete in BotConfigModal
+- [x] Push changes to GitHub
