@@ -421,9 +421,3 @@
 - [ ] Bot #2 positions view (filtered by bot_id in signalReason) — shared positions table, filter pending
 - [x] Bot #2 scan results display (ranked pairs table with direction, TSI values, spread, hook score)
 - [x] Write vitest tests for FOTSI engine (14 tests — constants, config CRUD, cache, sessions merge)
-
-## Regime Scoring Controls in Strategy Tab
-- [x] Add regimeScoring config fields (enabled: boolean, strengthMultiplier: number) to bot-config defaults
-- [x] Add regime scoring toggle + strength slider to BotConfigModal Strategy tab
-- [x] Wire regime config into bot-scanner and backtest-engine Edge Functions (read from config, apply multiplier)
-- [x] Push changes to GitHub

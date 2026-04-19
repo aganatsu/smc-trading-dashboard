@@ -205,51 +205,6 @@ function StrategySection({ config, onChange }: { config: any; onChange: (key: st
           <NumberInput label="Min TFs Aligned" value={config.minTFsAligned} onChange={v => onChange('minTFsAligned', v)} min={1} max={3} />
         </div>
       )}
-
-      <SectionHeader title="Regime Scoring" collapsed={!!collapsed.regime} onToggle={() => toggle('regime')} />
-      {!collapsed.regime && (
-        <div className="pl-2 border-l border-zinc-700/50">
-          <Toggle label="Enable Regime Scoring" description="Adjust confluence score based on market regime alignment (trend vs range)" value={config.regimeScoringEnabled ?? true} onChange={v => onChange('regimeScoringEnabled', v)} />
-          {(config.regimeScoringEnabled ?? true) && (
-            <>
-              <div className="py-2 px-1">
-                <div className="flex items-center justify-between mb-1">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">Regime Strength</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Scales the bonus/penalty (0.25x = subtle, 2.0x = aggressive)</div>
-                  </div>
-                  <span className="text-sm font-mono text-cyan-400 tabular-nums">{(config.regimeScoringStrength ?? 1.0).toFixed(2)}x</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.25}
-                  max={2.0}
-                  step={0.25}
-                  value={config.regimeScoringStrength ?? 1.0}
-                  onChange={e => onChange('regimeScoringStrength', parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-cyan-500"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                  <span>0.25x</span>
-                  <span>1.0x</span>
-                  <span>2.0x</span>
-                </div>
-              </div>
-              <div className="px-1 py-2">
-                <div className="text-xs text-muted-foreground bg-zinc-800/50 rounded p-2 border border-zinc-700/50">
-                  <div className="font-medium text-foreground mb-1">How it works:</div>
-                  <div className="space-y-0.5">
-                    <div>• <span className="text-emerald-400">Trend setup</span> in trending market → <span className="text-emerald-400">+0.25 to +0.5</span> bonus</div>
-                    <div>• <span className="text-red-400">Trend setup</span> in choppy market → <span className="text-red-400">-0.75 to -1.5</span> penalty</div>
-                    <div>• Range setups get the inverse treatment</div>
-                    <div>• All values scaled by the strength multiplier above</div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

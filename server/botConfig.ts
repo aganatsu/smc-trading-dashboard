@@ -66,10 +66,6 @@ export interface StrategySettings {
   entryTimeframe: '1H' | '15m' | '5m' | '1m';
   requireAllTFAligned: boolean;
   minTFsAligned: number; // 2 or 3
-
-  // Regime Scoring
-  regimeScoringEnabled: boolean;       // Enable/disable regime-aware score adjustments
-  regimeScoringStrength: number;       // Multiplier for bonus/penalty (0.25 - 2.0, default 1.0)
 }
 
 export interface RiskSettings {
@@ -223,8 +219,6 @@ export const DEFAULT_CONFIG: BotConfig = {
     entryTimeframe: '15m',
     requireAllTFAligned: false,
     minTFsAligned: 2,
-    regimeScoringEnabled: true,
-    regimeScoringStrength: 1.0,
   },
   risk: {
     riskPerTrade: 1,
