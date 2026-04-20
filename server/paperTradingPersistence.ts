@@ -93,6 +93,7 @@ export async function savePosition(userId: number, pos: PaperPosition) {
       signalReason: pos.signalReason,
       signalScore: pos.signalScore.toString(),
       orderId: pos.orderId,
+      brokerTradeId: pos.brokerTradeId ?? null,
       status: 'open',
     });
   } catch (err) {
@@ -200,6 +201,7 @@ export async function restoreState(userId: number): Promise<RestoredState | null
       signalReason: row.signalReason || '',
       signalScore: parseFloat(row.signalScore),
       orderId: row.orderId,
+      brokerTradeId: row.brokerTradeId ?? undefined,
     }));
 
     const pendingOrders: PendingOrder[] = dbPending.map(row => ({

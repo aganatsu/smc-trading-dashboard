@@ -23,7 +23,7 @@ import { notifyTradeClosed, notifyTradePlaced } from './notifications';
 import { fetchQuoteFromYahoo } from './marketData';
 import { createTrade } from './db';
 import { validateTradeAgainstConfig, getConfig } from './botConfig';
-import { executeLiveOrder, type LiveExecutionResult } from './liveExecution';
+import { executeLiveOrder, closeLivePosition, type LiveExecutionResult } from './liveExecution';
 import {
   saveAccountState,
   savePosition,
@@ -57,6 +57,8 @@ export interface PaperPosition {
   signalReason: string;
   signalScore: number;
   orderId: string;
+  /** Broker trade/position ID from live execution (OANDA trade ID or MetaApi position ID) */
+  brokerTradeId?: string;
 }
 
 export interface PaperTradeRecord {
@@ -446,6 +448,22 @@ async function closePositionInternal(positionId: string, reason: 'manual' | 'sto
   
   balance += finalPnl;
   if (balance > peakBalance) peakBalance = balance;
+
+  // ─── LIVE BROKER CLOSE ──────────────────────────────────────
+  // If this position was opened via a live broker, close the broker position too
+  if (executionMode === 'live' && pos.brokerTradeId && ownerUserId) {
+    addLog('trade', `[LIVE] Closing broker position #${pos.brokerTradeId}...`);
+    try {
+      const closeResult = await closeLivePosition(ownerUserId, pos.brokerTradeId);
+      if (closeResult.success) {
+        addLog('trade', `[LIVE] Broker position #${pos.brokerTradeId} closed successfully`);
+      } else {
+        addLog('error', `[LIVE] Failed to close broker position #${pos.brokerTradeId}: ${closeResult.error}`);
+      }
+    } catch (err: any) {
+      addLog('error', `[LIVE] Exception closing broker position #${pos.brokerTradeId}: ${err.message}`);
+    }
+  }
   
   // Generate post-mortem before removing position
   if (_generatePostMortem) {
@@ -719,6 +737,10 @@ export async function placeOrder(params: {
       });
       if (liveResult.success) {
         addLog('trade', `[LIVE] Broker fill confirmed: ${liveResult.broker?.toUpperCase()} Trade #${liveResult.brokerTradeId}${liveResult.fillPrice ? ` @ ${liveResult.fillPrice}` : ''}`);
+        // Store broker trade ID on position for close routing
+        if (liveResult.brokerTradeId) {
+          position.brokerTradeId = liveResult.brokerTradeId;
+        }
         // Update entry price to actual fill price if available
         if (liveResult.fillPrice && liveResult.fillPrice > 0) {
           position.entryPrice = liveResult.fillPrice;

@@ -1,6 +1,6 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
@@ -35,6 +35,13 @@
       "version": "5",
       "when": 1776222862817,
       "tag": "0004_condemned_union_jack",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1776699007640,
+      "tag": "0005_zippy_mentallo",
       "breakpoints": true
     }
   ]

@@ -211,6 +211,8 @@ export const paperPositions = sqliteTable("paper_positions", {
   signalReason: text("signalReason"),
   signalScore: text("signalScore").default("0").notNull(),
   orderId: text("orderId").notNull(),
+  /** Broker trade/position ID from live execution (OANDA trade ID or MetaApi position ID) */
+  brokerTradeId: text("brokerTradeId"),
   /** 'open' | 'pending' */
   status: text("positionStatus").default("open").notNull(),
   triggerPrice: text("triggerPrice"),

@@ -54,6 +54,8 @@ import {
   getLiveBrokerStatus,
   setActiveBrokerConnection,
   getActiveBrokerConnectionId,
+  executeLiveOrder,
+  closeLivePosition,
 } from "./liveExecution";
 
 describe("Live Execution Module", () => {
@@ -146,6 +148,180 @@ describe("Live Execution Module", () => {
       const maxAllowed = MAX_LIVE_LOT_SIZES[symbol] || 1.0;
       expect(maxAllowed).toBe(1.0);
     });
+  });
+});
+
+describe("Live Order Execution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setActiveBrokerConnection(null);
+  });
+
+  it("should return error when no broker connection is configured", async () => {
+    const result = await executeLiveOrder(1, {
+      symbol: "EUR/USD",
+      direction: "long",
+      size: 0.1,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No broker connection");
+  });
+
+  it("should route order to MetaApi when MetaApi broker is active", async () => {
+    setActiveBrokerConnection(2);
+    mockGetBrokerConnectionById.mockResolvedValue({
+      id: 2,
+      brokerType: "metaapi",
+      apiKey: "meta-token-123",
+      accountId: "meta-acc-456",
+      isLive: false,
+      displayName: "Test MetaApi",
+    });
+    mockGetMetaApiAccountInfo.mockResolvedValue({
+      balance: 50000,
+      equity: 50000,
+      freeMargin: 45000,
+    });
+    mockPlaceMetaApiOrder.mockResolvedValue({
+      orderId: "order-789",
+      positionId: "pos-101",
+    });
+
+    const result = await executeLiveOrder(1, {
+      symbol: "EUR/USD",
+      direction: "long",
+      size: 0.1,
+      stopLoss: 1.0900,
+      takeProfit: 1.1100,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.broker).toBe("metaapi");
+    expect(result.brokerTradeId).toBe("pos-101");
+    expect(result.brokerOrderId).toBe("order-789");
+    expect(mockPlaceMetaApiOrder).toHaveBeenCalledWith(
+      { token: "meta-token-123", accountId: "meta-acc-456" },
+      expect.objectContaining({
+        symbol: "EUR/USD",
+        direction: "long",
+        volume: 0.1,
+        stopLoss: 1.0900,
+        takeProfit: 1.1100,
+      })
+    );
+  });
+
+  it("should route order to OANDA when OANDA broker is active", async () => {
+    setActiveBrokerConnection(3);
+    mockGetBrokerConnectionById.mockResolvedValue({
+      id: 3,
+      brokerType: "oanda",
+      apiKey: "oanda-key-123",
+      accountId: "oanda-acc-456",
+      isLive: false,
+      displayName: "Test OANDA",
+    });
+    mockGetOandaAccountSummary.mockResolvedValue({
+      balance: "50000",
+      marginAvailable: "45000",
+    });
+    mockPlaceOandaOrder.mockResolvedValue({
+      orderFillTransaction: {
+        id: "txn-100",
+        price: "1.1050",
+        tradeOpened: { tradeID: "trade-200" },
+      },
+    });
+
+    const result = await executeLiveOrder(1, {
+      symbol: "EUR/USD",
+      direction: "long",
+      size: 0.1,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.broker).toBe("oanda");
+    expect(result.brokerTradeId).toBe("trade-200");
+    expect(result.fillPrice).toBe(1.1050);
+  });
+
+  it("should reject order exceeding max lot size", async () => {
+    setActiveBrokerConnection(2);
+    mockGetBrokerConnectionById.mockResolvedValue({
+      id: 2,
+      brokerType: "metaapi",
+      apiKey: "meta-token",
+      accountId: "meta-acc",
+      isLive: false,
+      displayName: "Test MetaApi",
+    });
+    mockGetMetaApiAccountInfo.mockResolvedValue({
+      balance: 50000,
+      equity: 50000,
+      freeMargin: 45000,
+    });
+
+    const result = await executeLiveOrder(1, {
+      symbol: "EUR/USD",
+      direction: "long",
+      size: 10.0, // exceeds 5.0 max
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("exceeds max live limit");
+  });
+});
+
+describe("Live Position Close", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setActiveBrokerConnection(null);
+  });
+
+  it("should return error when no broker connection", async () => {
+    const result = await closeLivePosition(1, "trade-123");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No broker connection");
+  });
+
+  it("should close MetaApi position by ID", async () => {
+    setActiveBrokerConnection(2);
+    mockGetBrokerConnectionById.mockResolvedValue({
+      id: 2,
+      brokerType: "metaapi",
+      apiKey: "meta-token",
+      accountId: "meta-acc",
+      isLive: false,
+      displayName: "Test MetaApi",
+    });
+    mockCloseMetaApiPosition.mockResolvedValue({ success: true });
+
+    const result = await closeLivePosition(1, "pos-101");
+    expect(result.success).toBe(true);
+    expect(mockCloseMetaApiPosition).toHaveBeenCalledWith(
+      { token: "meta-token", accountId: "meta-acc" },
+      "pos-101"
+    );
+  });
+
+  it("should close OANDA trade by ID", async () => {
+    setActiveBrokerConnection(3);
+    mockGetBrokerConnectionById.mockResolvedValue({
+      id: 3,
+      brokerType: "oanda",
+      apiKey: "oanda-key",
+      accountId: "oanda-acc",
+      isLive: false,
+      displayName: "Test OANDA",
+    });
+    mockCloseOandaTrade.mockResolvedValue({ success: true });
+
+    const result = await closeLivePosition(1, "trade-200");
+    expect(result.success).toBe(true);
+    expect(mockCloseOandaTrade).toHaveBeenCalledWith(
+      { apiKey: "oanda-key", accountId: "oanda-acc", isLive: false },
+      "trade-200"
+    );
   });
 });
 

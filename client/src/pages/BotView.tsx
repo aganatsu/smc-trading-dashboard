@@ -105,12 +105,38 @@ export default function BotView() {
 
   const d = status.data;
 
+  // ─── Bot-Filtered Data ─────────────────────────────────────────
+  // When Bot #2 (FOTSI) is active, filter positions/history to only show FOTSI trades.
+  // When Bot #1 (SMC) is active, filter out FOTSI trades (show only SMC trades).
+  const isFOTSI = (reason: string | undefined | null) => {
+    if (!reason) return false;
+    const lower = reason.toLowerCase();
+    return lower.includes('fotsi') || lower.includes('mean reversion') || lower.includes('currency strength');
+  };
+
+  const filteredPositions = useMemo(() => {
+    if (!d) return [];
+    if (activeBot === 'fotsi') return d.positions.filter(p => isFOTSI(p.signalReason));
+    return d.positions.filter(p => !isFOTSI(p.signalReason));
+  }, [d, activeBot]);
+
+  const filteredPendingOrders = useMemo(() => {
+    if (!d?.pendingOrders) return [];
+    if (activeBot === 'fotsi') return d.pendingOrders.filter(o => isFOTSI(o.signalReason));
+    return d.pendingOrders.filter(o => !isFOTSI(o.signalReason));
+  }, [d, activeBot]);
+
+  const filteredTradeHistory = useMemo(() => {
+    if (!d) return [];
+    if (activeBot === 'fotsi') return d.tradeHistory.filter(t => isFOTSI(t.signalReason));
+    return d.tradeHistory.filter(t => !isFOTSI(t.signalReason));
+  }, [d, activeBot]);
+
   // Filter trade history for "closed today"
   const closedToday = useMemo(() => {
-    if (!d) return [];
     const today = new Date().toISOString().split('T')[0];
-    return d.tradeHistory.filter(t => t.closedAt.startsWith(today));
-  }, [d]);
+    return filteredTradeHistory.filter(t => t.closedAt.startsWith(today));
+  }, [filteredTradeHistory]);
 
   if (!isAuthenticated) {
     return (
@@ -357,8 +383,8 @@ export default function BotView() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-foreground mb-2">Positions & History</h2>
             <div className="flex gap-1 border-b border-border">
               {[
-                { key: 'open' as const, label: `Open Positions (${d.positions.length})` },
-                { key: 'pending' as const, label: `Pending (${d.pendingOrders?.length ?? 0})` },
+                { key: 'open' as const, label: `Open Positions (${filteredPositions.length})` },
+                { key: 'pending' as const, label: `Pending (${filteredPendingOrders.length})` },
                 { key: 'closedToday' as const, label: `Closed Today (${closedToday.length})` },
                 { key: 'history' as const, label: 'All History' },
               ].map(tab => (
@@ -379,9 +405,9 @@ export default function BotView() {
 
           <div className="flex-1 overflow-auto px-4 py-2 min-h-0">
             {posTab === 'open' && (
-              d.positions.length === 0 ? (
+              filteredPositions.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">
-                  No open positions. Click "+ Order" to place a trade.
+                  {activeBot === 'fotsi' ? 'No FOTSI positions. Bot #2 trades will appear here.' : 'No open positions. Click "+ Order" to place a trade.'}
                 </div>
               ) : (
                 <table className="w-full text-xs font-mono">
@@ -401,7 +427,7 @@ export default function BotView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d.positions.map(pos => (
+                    {filteredPositions.map(pos => (
                       <tr key={pos.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
                         <td className="py-2 pr-2 font-bold text-foreground">{pos.symbol.replace('/', '')}</td>
                         <td className="py-2 pr-2">
@@ -440,8 +466,10 @@ export default function BotView() {
             )}
 
             {posTab === 'pending' && (
-              !d.pendingOrders?.length ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">No pending orders.</div>
+              filteredPendingOrders.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">
+                  {activeBot === 'fotsi' ? 'No FOTSI pending orders.' : 'No pending orders.'}
+                </div>
               ) : (
                 <table className="w-full text-xs font-mono">
                   <thead>
@@ -458,7 +486,7 @@ export default function BotView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d.pendingOrders.map(order => (
+                    {filteredPendingOrders.map(order => (
                       <tr key={order.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
                         <td className="py-2 pr-2 font-bold text-foreground">{order.symbol.replace('/', '')}</td>
                         <td className="py-2 pr-2">
@@ -531,8 +559,10 @@ export default function BotView() {
             )}
 
             {posTab === 'history' && (
-              d.tradeHistory.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">No trade history yet.</div>
+              filteredTradeHistory.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">
+                  {activeBot === 'fotsi' ? 'No FOTSI trade history yet.' : 'No trade history yet.'}
+                </div>
               ) : (
                 <table className="w-full text-xs font-mono">
                   <thead>
@@ -550,7 +580,7 @@ export default function BotView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...d.tradeHistory].reverse().map(t => (
+                    {[...filteredTradeHistory].reverse().map(t => (
                       <tr key={t.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
                         <td className="py-2 pr-2 font-bold text-foreground">{t.symbol.replace('/', '')}</td>
                         <td className="py-2 pr-2">
