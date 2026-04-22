@@ -593,3 +593,8 @@
 - [x] Build FOTSIStrengthMeter component matching screenshot design (horizontal bars, flags, OB/OS zones, ranked pairs tab, key divergences)
 - [x] Integrate meter into BotView right sidebar as collapsible card (between Performance and Engine Controls)
 - [x] Verify TypeScript compilation and visual output (0 errors, balanced braces)
+
+## Bug: Scan Results Not Showing in BotView
+- [ ] Investigate why scan log section shows "No scans yet" despite scans running
+- [ ] Check if FOTSI removal broke the scan results rendering
+- [ ] Fix scan display issue
