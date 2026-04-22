@@ -586,3 +586,10 @@
 - [x] Reduce FOTSI batch size from 7 to 5 with 1.2s inter-batch delay
 - [x] Increase per-instrument delay from 500ms to 1s
 - [x] Import and call resetThrottleStats in bot-scanner at scan start and end
+
+## FOTSI Currency Strength Meter Widget (Rebuild)
+- [x] Investigate how FOTSI data flows from bot-scanner scan results to frontend
+- [x] Add fotsiStrengths to __meta entry in bot-scanner scan details
+- [x] Build FOTSIStrengthMeter component matching screenshot design (horizontal bars, flags, OB/OS zones, ranked pairs tab, key divergences)
+- [x] Integrate meter into BotView right sidebar as collapsible card (between Performance and Engine Controls)
+- [x] Verify TypeScript compilation and visual output (0 errors, balanced braces)
