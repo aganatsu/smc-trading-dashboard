@@ -595,6 +595,12 @@
 - [x] Verify TypeScript compilation and visual output (0 errors, balanced braces)
 
 ## Bug: Scan Results Not Showing in BotView
-- [ ] Investigate why scan log section shows "No scans yet" despite scans running
-- [ ] Check if FOTSI removal broke the scan results rendering
-- [ ] Fix scan display issue
+- [x] Investigate why scan log section shows "No scans yet" despite scans running
+- [x] Check if FOTSI removal broke the scan results rendering (it didn't — issue was details_json string parsing)
+- [x] Fix scan display issue (added JSON.parse safety + fixed analysis_snapshot.fotsi path)
+
+## Bug: Trade Management Not Reaching MT4/5 Broker
+- [ ] Trailing stop, break-even, partial TP fire internally (Telegram notifications sent) but don't modify positions on MT4/5
+- [ ] Trace modifyBrokerSL and partialCloseBroker to find the disconnect
+- [ ] Check execution_mode gate, mirrored_connection_ids, and position matching
+- [ ] Fix the issue and add better error logging
