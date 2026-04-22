@@ -429,3 +429,160 @@
 - [x] Add Save Preset UI (button + name/description dialog)
 - [x] Add My Presets section with load/delete in BotConfigModal
 - [x] Push changes to GitHub
+
+## Collapse Three Thresholds Into One
+- [x] Remove minFactorCount from bot-scanner signal gate (keep only percentage threshold)
+- [x] Remove minStrongFactors from bot-scanner signal gate (keep only percentage threshold)
+- [x] Remove minFactorCount from backtest-engine signal gate
+- [x] Remove minStrongFactors from backtest-engine signal gate
+- [x] Remove minFactorCount from smcAnalysis.ts DEFAULTS
+- [x] Remove minFactorCount and minStrongFactors sliders from BotConfigModal.tsx
+- [x] Update presets to only use percentage threshold
+- [x] Clean up BotView.tsx gate summary display
+- [x] Clean up bot-config validation for removed fields
+
+## Fix Remaining Backtest Issues
+- [x] Add session time filtering (only trade during London/NY when enabled)
+- [x] Make STEP configurable (dynamic based on entryTimeframe + scanIntervalMinutes)
+- [x] Add weekend gap handling (skip Saturday/Sunday candles for FX/indices)
+- [ ] Update factor analytics to track percentage scores
+- [x] Align backtest engine gates with bot scanner gates (same logic, same order)
+- [x] Per-instrument spread simulation (SPECS[symbol].typicalSpread when spreadPips=0)
+- [x] Drawdown circuit breaker (real check using peakBalance)
+- [x] Shared regime classifier (replaced local copy with import from smcAnalysis)
+- [x] Updated bot-daily-review and bot-weekly-advisor for new threshold field
+- [x] Updated botStyleClassifier.ts to percentage-based confluenceThreshold
+
+## Backtest Documentation & Validation Test
+- [x] Document full backtest engine flow end-to-end (BACKTEST_ARCHITECTURE.md)
+- [x] Build deterministic validation test with known candle data (50 tests)
+- [x] Test threshold gate fires at correct percentage (config mapping tests)
+- [x] Test per-instrument spread applied correctly (5 spread tests)
+- [x] Test drawdown circuit breaker halts when it should (3 drawdown tests)
+- [x] Test weekend candles are skipped for FX (3 weekend tests)
+- [x] Test session filtering works correctly (4 session detection tests)
+- [x] All 50 tests passing with Deno test runner
+
+## Bug: Backtest Returns No Results
+- [x] Trace frontend Backtest.tsx request payload
+- [x] Trace Edge Function backtest-engine request handler
+- [x] Root cause: session case mismatch (DEFAULTS used 'London'/'New York', gate compared to 'london'/'newyork')
+- [x] Fix: lowercase DEFAULTS.enabledSessions, normalize in mapConfig, fix frontend symbol names
+- [x] Added 7 missing forex cross SPECS entries (AUD/NZD, NZD/JPY, CHF/JPY, NZD/CAD, AUD/CHF, NZD/CHF, CAD/CHF)
+- [x] Fixed frontend SYMBOL_GROUPS (USOIL→'US Oil', removed UKOIL/US2000 — no backend support)
+- [x] Added diagnostic counters to backtest response + zero-trade diagnostic UI panel
+- [ ] Verify backtest produces results after fix (needs deploy + test)
+
+## Backtest Engine: Background Execution Refactor
+- [x] Map current architecture (entry point, frontend invocation, existing tables)
+- [x] Create backtest_runs table migration (id, user_id, status, progress, results, config, timestamps)
+- [x] Refactor backtest-engine to EdgeRuntime.waitUntil background pattern
+- [x] Return runId immediately on start action, persist results to backtest_runs table
+- [x] Add action-based routing: start/status/list
+- [x] Update frontend Backtest.tsx to poll backtestApi.status() every 2s
+- [x] Add progress updates at 6 milestones (10/30/50/55/85/95%)
+- [x] Add progress bar with percentage, cancel button, run ID display
+- [x] Verify syntax (balanced), all 50 Deno tests still passing
+- [x] Committed and pushed to main
+
+## Bug: Trades Placed With All Confluences Off (FIXED)
+- [x] Trace scoring logic when all factors are disabled
+- [x] Root cause 1: DEFAULTS.minConfluence was 5.5 (legacy 0-10 scale) — any score above 5.5% passed on 0-100 scale
+- [x] Root cause 2: enabledMax summed ALL factor weights including disabled ones — percentage denominator inflated
+- [x] Root cause 3: backtest-engine had different factor weight keys/values than bot-scanner
+- [x] Fix: DEFAULTS.minConfluence 5.5→55, STYLE_OVERRIDES 5/5.5/6.5→45/55/65
+- [x] Fix: Auto-scale legacy 0-10 configs to percentage in both loadConfig/mapConfig
+- [x] Fix: enabledMax uses FACTOR_TOGGLE_MAP to skip disabled factors from denominator
+- [x] Fix: Po3 bonus only added to enabledMax when prerequisite factors enabled
+- [x] Fix: Backtest factor weights synced with bot-scanner totals (23.5)
+- [x] All 50 Deno tests still passing
+
+## Bug: Weekend Detection Investigation (NOT a bug — diagnostics were misleading)
+- [x] Investigate weekend detection logic — correct (UTC getUTCDay 0=Sun, 6=Sat)
+- [x] Diagnostic counters WERE double-counting — totalCandlesEvaluated was post-filter, not pre-filter
+- [x] Added totalCandlesFetched counter at start of loop (before any filters)
+- [x] Session filter verified correct — 42% filtered matches expected off-hours ratio
+- [x] Restructured diagnostic UI as proper funnel (5 rows: total → pre-filters → analyzed → analysis → outcome)
+- [x] Zero trades caused by threshold + enabledMax fix not yet deployed, not by filtering bugs
+
+## Diagnostic Panel Upgrade — Actionable Advice
+- [x] Add highestScoreSeen tracking to backtest engine diagnostics
+- [x] Add enabledFactorCount and totalFactorCount to diagnostics
+- [x] Add score distribution histogram (below20/below40/below60/below80/above80)
+- [x] Build smart advice engine in Backtest.tsx diagnostic panel
+- [x] Prioritized recommendations based on funnel bottleneck analysis
+- [x] Show "Best score was X% but threshold is Y%" when below-threshold is the blocker
+- [x] Show session coverage advice when session filter removes >50% of candles
+- [x] Show factor enablement advice when few factors are enabled
+- [x] Show "no direction" advice when many candles lack directional bias
+
+## Session UI Fix
+- [x] Fix Backtest.tsx session labels — use ET times matching actual detectSession() boundaries
+- [x] Rename Sydney → Off-Hours in Backtest.tsx (backend never returns "Sydney")
+- [x] Fix BotConfigModal.tsx Sydney description to clarify it maps to Off-Hours in backend
+
+## Full Session System Refactor
+- [x] Create `_shared/sessions.ts` — single canonical session module (4 non-overlapping sessions, DST-aware)
+- [x] Migrate bot-scanner to import from `_shared/sessions.ts` (delete local detectSession)
+- [x] Fix bot-scanner empty-array bug (empty filter = nothing enabled, not "no filtering")
+- [x] Migrate backtest-engine to use `_shared/sessions.ts`
+- [x] Migrate FOTSI bot to use `_shared/sessions.ts` (fix DST hardcode, convert boolean config)
+- [x] Rewrite frontend `sessionSchedule.ts` to read `sessions.filter` array format
+- [x] Rewrite `SessionStatusPill.tsx` to use new sessionSchedule
+- [x] Fix config validation in `bot-config/index.ts` — reject unknown session names, auto-migrate sydney→offhours
+- [x] Remove Sydney from all UI — only Asian, London, New York, Off-Hours
+- [x] Fix BotConfigModal session toggles to use "offhours" instead of "sydney"
+- [x] Fix FOTSIConfigModal session toggles — converted from boolean to filter-array format
+- [x] Fix Backtest.tsx session toggles
+- [x] Also fixed: marketData.ts getCurrentSession() (now DST-aware NY time), scannerManagement.ts sessionNameMap (uses filterKey)
+- [x] Test all changes — 50 Deno tests passing, all type checks passing
+
+## Scan Now Button Bug
+- [x] Investigate: Scan Now button stays active after click — fixed: now awaits scan, button stays loading until done
+- [x] Fix button to show loading/disabled state during scan — button now spins for full scan duration
+- [x] Ensure scan results actually appear after scan completes — detailed toast with breakdown
+- [x] Pre-existing bug: background scan silently fails — no results appear after "Scan Now"
+- [x] Investigate: errors swallowed by .catch() in manual_scan handler — fixed by awaiting scan
+
+## Scan Error Reporting
+- [x] Backend: change manual_scan from fire-and-forget to await-and-return full result
+- [x] Backend: return detailed result (pairsScanned, signalsFound, tradesPlaced, skippedReason, error)
+- [x] Frontend: show detailed scan result toast (not just "Scan started")
+- [x] Frontend: show specific error/skip reason when scan produces no results
+
+## Scan Log Refresh + Overlap Lock Bugs
+- [x] Scan log list doesn't refresh after manual scan completes — fixed: reset selectedScanIdx to 0 on success
+- [x] First click shows "Another scan is still running" — fixed: manual scans force-clear stale lock before acquiring
+
+## FOTSI Cron Wasting API Credits
+- [x] FOTSI bot-scanner-fotsi is firing on cron even though user doesn't use it
+- [x] FOTSI consumes ~28 TwelveData credits per cycle, eating half the 55/min budget
+- [x] Investigate how FOTSI cron is triggered and add early-exit if not enabled
+- [x] Add rate-limit throttling to candle source as safety net
+- [x] Delete bot-scanner-fotsi folder from codebase
+- [x] Clean up any frontend references to bot-scanner-fotsi
+- [x] Add rate-limit throttling to candle source in main bot-scanner
+
+## FOTSI Bot Removal (Complete)
+- [x] Delete supabase/functions/bot-scanner-fotsi/ folder
+- [x] Remove fotsiScannerApi and fotsiConfigApi from src/lib/api.ts
+- [x] Remove Bot #2 tab switcher from BotView.tsx
+- [x] Remove FOTSIMeter import and conditional rendering from BotView.tsx
+- [x] Remove all activeBot === "fotsi" conditionals from scan log section
+- [x] Remove FOTSI scan results rendering block (replaced with SMC-only)
+- [x] Remove FOTSI scan detail rendering block (replaced with SMC-only)
+- [x] Remove FOTSIConfigModal rendering from BotView.tsx
+- [x] Delete src/components/FOTSIConfigModal.tsx
+- [x] Delete src/components/FOTSIMeter.tsx
+- [x] TypeScript compiles clean, brace balance verified
+- [ ] User manual: Delete bot-scanner-fotsi from Supabase Dashboard Edge Functions
+- [ ] User manual: Kill FOTSI cron job in Supabase SQL Editor
+
+## TwelveData Rate-Limit Throttling
+- [x] Lower TD_RATE_LIMIT from 55 to 50 (5 credit safety margin)
+- [x] Increase max wait threshold from 10s to 25s (wait for slots instead of falling back)
+- [x] Add throttle counter tracking and resetThrottleStats() export
+- [x] Add rateLimitThrottles to scan meta entry for UI visibility
+- [x] Reduce FOTSI batch size from 7 to 5 with 1.2s inter-batch delay
+- [x] Increase per-instrument delay from 500ms to 1s
+- [x] Import and call resetThrottleStats in bot-scanner at scan start and end
