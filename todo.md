@@ -680,3 +680,14 @@
 - [x] Wrap Backtest route in individual ErrorBoundary in App.tsx
 - [ ] Wrap BotConfigModal usage in ErrorBoundary (deferred — already inside BotView boundary)
 - [ ] Wrap RecommendationsDashboard usage in ErrorBoundary (deferred — already inside BotView boundary)
+
+## Scoring Engine Rewrite: Tiered Model (April 22, 2026)
+- [x] Remove group caps from scoring
+- [x] Implement tiered scoring: Tier 1 (core ×2), Tier 2 (confirmation ×1), Tier 3 (bonus ×0.5)
+- [x] Move spread penalty to separate gate (pass/fail, not score adjustment)
+- [x] Move regime penalty to separate gate (pass/fail, not score adjustment)
+- [x] Add minimum Tier 1 gate: at least 2 Tier 1 factors required for any trade
+- [x] Update score normalization to use tiered weights instead of factor weights
+- [x] Verify TypeScript compilation and balanced braces (all balanced after stripping comments)
+- [x] Commit and push bot-scanner (commit a92b090)
+- [ ] Deploy bot-scanner to Supabase (user action)
