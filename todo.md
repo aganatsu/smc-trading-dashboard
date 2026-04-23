@@ -623,6 +623,20 @@
 - [x] TypeScript compilation verified (0 errors, balanced braces)
 
 ## BrokerTradesTab: Collapsible + Draggable Sections
-- [ ] Add collapse/expand toggle to each section (Account Summary, Open Positions, Sync Status, Trade History)
-- [ ] Add drag handles and drag-to-reorder functionality for sections
-- [ ] Persist section order and collapse state in localStorage
+- [x] Add collapse/expand toggle to each section (Account Summary, Open Positions, Sync Status, Trade History)
+- [x] Add drag handles and drag-to-reorder functionality for sections
+- [x] Persist section order and collapse state in localStorage
+
+## Bug: MT4/MT5 Live SL/TP Edit Shows "Unknown" Error
+- [x] Investigate modify_trade action in broker-execute Edge Function — user gets "unknown something" error when editing SL/TP inline (root cause: broker-execute not deployed yet, "Unknown action" fallback)
+- [x] Fix the modify_trade MetaAPI call — code was correct, just needed deployment
+- [ ] Verify the fix works end-to-end (frontend edit → broker-execute → MetaAPI → MT4/MT5 position updated) — user deployed
+
+## BotView Collapsible Panels
+- [x] Add collapse/expand toggle to the Latest Scan Results section in BotView
+- [x] Add collapse/expand toggle to the right sidebar (FOTSI meter, Performance, Engine Controls)
+- [x] Persist collapse state in localStorage
+
+## Bug: Broker SL Sync — Telegram Says Tightened But MT4/MT5 Unchanged
+- [x] Investigate: SL tightened notification sent via Telegram but actual MT4/MT5 position SL not modified (root cause: bot-scanner not deployed with broker sync fix)
+- [x] Check if this is the same bot-scanner broker sync bug (needs supabase functions deploy) — confirmed same issue, user deployed
