@@ -710,3 +710,10 @@
 - [x] Add explanation of how custom weights multiply tier base points
 - [x] Verify TypeScript compilation (tsc --noEmit exit 0)
 - [x] Commit and push to GitHub (commit d40b0bf)
+
+## Spread Gate: Convert to Info-Only (April 23, 2026)
+- [x] Convert Gate 21 (Spread Quality) from hard reject to info-only in bot-scanner
+- [x] Update frontend TierFactorBreakdown to show spread as info-only (Info icon, not pass/fail shield)
+- [x] Update BotConfigModal gates section to reflect spread is info-only
+- [x] Verify TypeScript compilation (tsc --noEmit exit 0)
+- [x] Commit and push to GitHub (commit 0dcdb89)
