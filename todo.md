@@ -604,3 +604,20 @@
 - [ ] Trace modifyBrokerSL and partialCloseBroker to find the disconnect
 - [ ] Check execution_mode gate, mirrored_connection_ids, and position matching
 - [ ] Fix the issue and add better error logging
+
+## Bug: Factor Weights, Spread Quality, and Regime Alignment Config Issues
+- [ ] Investigate how factor weights interact with percentage gate scoring
+- [ ] Fix spread quality showing as disabled when it should be enabled
+- [ ] Fix regime alignment stuck disabled and cannot be re-enabled
+- [ ] Verify config toggles properly save and load state
+
+## MT4/MT5 Live Trades Tab
+- [ ] Create broker-positions Supabase Edge Function (fetch open positions, account info, trade history from MetaAPI)
+- [ ] Add broker-positions API client in frontend lib/api.ts
+- [ ] Build BrokerTradesTab component with 4 sections:
+  - [ ] Open Positions table (symbol, direction, lot size, entry, current, P&L, SL/TP, bot-managed flag, duration)
+  - [ ] Sync Status panel (paper ledger vs broker position comparison, mismatch highlights)
+  - [ ] Account Summary card (balance, equity, margin, free margin, floating P&L)
+  - [ ] Trade History table (last 50 closed trades, actual P&L, compare with paper)
+- [ ] Integrate tab into BotView with tab switching (Scanner | Live Trades)
+- [ ] Verify TypeScript compilation
