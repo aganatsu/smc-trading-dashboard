@@ -691,3 +691,13 @@
 - [x] Verify TypeScript compilation and balanced braces (all balanced after stripping comments)
 - [x] Commit and push bot-scanner (commit a92b090)
 - [ ] Deploy bot-scanner to Supabase (user action)
+
+## Frontend: Tier-Grouped Factor Display (April 23, 2026)
+- [x] Create shared TierFactorBreakdown component with T1/T2/T3 collapsible sections
+- [x] Update BotView ScanSignalDetail to use tier-grouped factor display
+- [x] Update BotView ScanDetailInline to use tier-grouped factor display
+- [x] Update SignalReasoningCard to use tier-grouped factor display
+- [x] Update score header to show T1:x/4, T2:x/5, T3:x/8 counts (TierScoreSummary component)
+- [x] Show tiered scoring gates (Tier 1 minimum, Regime, Spread) in gates section (TierGates component)
+- [x] Verify TypeScript compilation (tsc --noEmit exit 0)
+- [x] Commit and push to GitHub (commit d988c60)
