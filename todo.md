@@ -746,3 +746,8 @@
 - [x] Gap 4: BB vs MB distinction — label Breaker Blocks as true "breaker" (new HH/LL confirmed) vs "mitigation_block" (no new extreme)
 - [x] Verify TypeScript compilation and brace balance (all 0/0/0, tsc clean)
 - [x] Commit and push to GitHub (commit 4deef8e)
+
+## Gate Threshold Visibility (April 23, 2026)
+- [x] Show actual resolved minConfluence gate on dashboard (e.g. "Gate: 40% (Scalper)" not just raw 55%)
+- [x] Include resolved gate in scan detail output alongside the score (resolvedMinConfluence in manual scan response)
+- [x] Show style-based threshold in bot config UI so user knows what they're getting (Gate badge shows style name + warning color when overridden)
