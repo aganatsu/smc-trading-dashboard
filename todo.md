@@ -751,3 +751,9 @@
 - [x] Show actual resolved minConfluence gate on dashboard (e.g. "Gate: 40% (Scalper)" not just raw 55%)
 - [x] Include resolved gate in scan detail output alongside the score (resolvedMinConfluence in manual scan response)
 - [x] Show style-based threshold in bot config UI so user knows what they're getting (Gate badge shows style name + warning color when overridden)
+
+## FVG Improvements (April 23, 2026)
+- [x] FVG Quality Scoring: Add quality score (0-8) to each FVG at detection time (displacement +3, ATR-relative size +0-2, body ratio +0-1, structure break nearby +2)
+- [x] Update bot-scanner FVG scoring to scale points by quality instead of flat 2.0/1.5
+- [x] FVG-Aware SL/TP: Tighten SL to unfilled FVG boundary when FVG exists between entry and SL
+- [x] FVG-Aware SL/TP: Extend TP to far edge of unfilled FVG when FVG exists between entry and TP (commit 1b856b6)
