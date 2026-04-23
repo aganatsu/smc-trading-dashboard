@@ -739,3 +739,10 @@
 - [x] Backtest engine already passes candles with volume — no change needed
 - [x] Verify TypeScript compilation (tsc --noEmit clean)
 - [x] Commit and push to GitHub (commit 00f0607)
+
+## PineScript Comparison — OB/BB Improvements (April 23, 2026)
+- [x] Gap 1: OB scan-back — scan up to 10 bars back from engulfing candle to find last opposite-color candle (not just immediate prev)
+- [x] Gap 2: OB zone 50% wick extension — extend OB zone from body-only to body + 50% of wicks for more accurate institutional footprint
+- [x] Gap 4: BB vs MB distinction — label Breaker Blocks as true "breaker" (new HH/LL confirmed) vs "mitigation_block" (no new extreme)
+- [x] Verify TypeScript compilation and brace balance (all 0/0/0, tsc clean)
+- [x] Commit and push to GitHub (commit 4deef8e)
