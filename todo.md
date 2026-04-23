@@ -717,3 +717,16 @@
 - [x] Update BotConfigModal gates section to reflect spread is info-only
 - [x] Verify TypeScript compilation (tsc --noEmit exit 0)
 - [x] Commit and push to GitHub (commit 0dcdb89)
+
+## Regime Classifier Rewrite (April 23, 2026)
+- [x] Rewrite classifyInstrumentRegime with 7 SMC-aligned checks
+- [x] Check 1: Swing Structure (BOS vs CHoCH count)
+- [x] Check 2: EMA 20/50 Alignment (slope + separation)
+- [x] Check 3: Impulse vs Correction Ratio (catches pullbacks)
+- [x] Check 4: Consecutive Directional Candles
+- [x] Check 5: ADX (proper Wilder's smoothing calculation)
+- [x] Check 6: Higher Timeframe Bias Consistency (50d vs 20d)
+- [x] Check 7: Range Compression (BB width proxy)
+- [x] Updated scoring: -14 to +14 range, strong_trend >= 8, choppy_range <= -8
+- [x] Verify TypeScript compilation and brace balance (all 0, tsc clean)
+- [x] Commit and push to GitHub (commit 1a897ed)
