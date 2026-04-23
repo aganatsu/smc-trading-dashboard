@@ -701,3 +701,12 @@
 - [x] Show tiered scoring gates (Tier 1 minimum, Regime, Spread) in gates section (TierGates component)
 - [x] Verify TypeScript compilation (tsc --noEmit exit 0)
 - [x] Commit and push to GitHub (commit d988c60)
+
+## Settings: Factor Weights Tab Tier Grouping (April 23, 2026)
+- [x] Update FACTOR_WEIGHT_DEFS to include tier field (1, 2, 3)
+- [x] Regroup FactorWeightsTab by T1 Core / T2 Confirmation / T3 Bonus
+- [x] Show tier point value (×2pts, ×1pt, ×0.5pts) next to each factor
+- [x] Update Spread Quality to show as gate (pass/fail) not penalty
+- [x] Add explanation of how custom weights multiply tier base points
+- [x] Verify TypeScript compilation (tsc --noEmit exit 0)
+- [x] Commit and push to GitHub (commit d40b0bf)
