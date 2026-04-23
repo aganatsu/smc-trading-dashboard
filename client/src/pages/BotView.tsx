@@ -186,73 +186,75 @@ export default function BotView() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ═══ BOT SELECTOR TABS ═══ */}
-      <div className="flex items-center gap-0 border-b border-border bg-card/30 flex-shrink-0">
+      <div className="flex items-center gap-0 border-b border-border bg-card/30 flex-shrink-0 overflow-x-auto">
         <button
           onClick={() => setActiveBot('smc')}
-          className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2 ${
+          className={`px-3 md:px-5 py-2 md:py-2.5 text-[10px] md:text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
             activeBot === 'smc'
               ? 'text-cyan-400 border-cyan-400 bg-card/50'
               : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-card/20'
           }`}
         >
-          Bot #1 — SMC Confluence
+          <span className="md:hidden">SMC</span>
+          <span className="hidden md:inline">Bot #1 — SMC Confluence</span>
         </button>
         <button
           onClick={() => setActiveBot('fotsi')}
-          className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2 ${
+          className={`px-3 md:px-5 py-2 md:py-2.5 text-[10px] md:text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
             activeBot === 'fotsi'
               ? 'text-purple-400 border-purple-400 bg-card/50'
               : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-card/20'
           }`}
         >
-          Bot #2 — FOTSI Mean Reversion
+          <span className="md:hidden">FOTSI</span>
+          <span className="hidden md:inline">Bot #2 — FOTSI Mean Reversion</span>
         </button>
         <div className="flex-1" />
-        <FOTSIMeter collapsed={true} />
+        <div className="hidden md:block"><FOTSIMeter collapsed={true} /></div>
       </div>
 
       {/* ═══ TOP BAR ═══ */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 flex-shrink-0 gap-2 flex-wrap">
-        {/* Left: Controls */}
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between px-2 md:px-4 py-2 md:py-3 border-b border-border bg-card/50 flex-shrink-0 gap-2">
+        {/* Controls */}
+        <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
           {d.isRunning ? (
             <>
-              <button onClick={() => stopMut.mutate()} className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => stopMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 Stop
               </button>
-              <button onClick={() => pauseMut.mutate()} className="px-5 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => pauseMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 Pause
               </button>
             </>
           ) : d.isPaused ? (
             <>
-              <button onClick={() => startMut.mutate()} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => startMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 Resume
               </button>
-              <button onClick={() => stopMut.mutate()} className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => stopMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 Stop
               </button>
             </>
           ) : (
             <>
-              <button onClick={() => startMut.mutate()} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => startMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 ▶ Start
               </button>
-              <button onClick={() => resetMut.mutate()} className="px-5 py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+              <button onClick={() => resetMut.mutate()} className="px-3 md:px-5 py-1.5 md:py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
                 ↻ Reset
               </button>
             </>
           )}
-          <button onClick={() => setShowOrderForm(!showOrderForm)} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+          <button onClick={() => setShowOrderForm(!showOrderForm)} className="px-3 md:px-4 py-1.5 md:py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
             + Order
           </button>
-          <button onClick={() => activeBot === 'fotsi' ? setShowFOTSIConfig(true) : setShowConfig(true)} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs uppercase tracking-wider rounded transition">
+          <button onClick={() => activeBot === 'fotsi' ? setShowFOTSIConfig(true) : setShowConfig(true)} className="px-3 md:px-4 py-1.5 md:py-2 bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-[10px] md:text-xs uppercase tracking-wider rounded transition">
             ⚙ Config
           </button>
         </div>
 
-        {/* Center: Status */}
-        <div className="flex flex-col items-center">
+        {/* Status */}
+        <div className="flex flex-col items-start md:items-center">
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
               d.isRunning ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
@@ -297,17 +299,17 @@ export default function BotView() {
           )}
         </div>
 
-        {/* Right: Stat Counters */}
-        <div className="flex items-center gap-2">
+        {/* Stat Counters */}
+        <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto">
           {[
             { label: 'Scans', value: d.scanCount, color: 'text-cyan-400' },
             { label: 'Signals', value: d.signalCount, color: 'text-cyan-400' },
             { label: 'Trades', value: d.tradeCount, color: 'text-cyan-400' },
             { label: 'Win Rate', value: `${d.winRate}%`, color: 'text-emerald-400' },
           ].map(s => (
-            <div key={s.label} className="px-3 py-1.5 border border-border rounded bg-card/50 text-center min-w-[72px]">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</div>
-              <div className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</div>
+            <div key={s.label} className="px-2 md:px-3 py-1 md:py-1.5 border border-border rounded bg-card/50 text-center min-w-[56px] md:min-w-[72px]">
+              <div className="text-[9px] md:text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</div>
+              <div className={`text-xs md:text-sm font-bold font-mono ${s.color}`}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -315,11 +317,11 @@ export default function BotView() {
 
       {/* ═══ ORDER FORM (collapsible) ═══ */}
       {showOrderForm && (
-        <div className="px-4 py-3 border-b border-border bg-card/30 flex-shrink-0">
-          <div className="flex items-end gap-3 flex-wrap">
+        <div className="px-2 md:px-4 py-2 md:py-3 border-b border-border bg-card/30 flex-shrink-0">
+          <div className="grid grid-cols-2 md:flex md:items-end gap-2 md:gap-3">
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Order Type</label>
-              <select value={orderType} onChange={e => setOrderType(e.target.value as typeof orderType)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-28">
+              <select value={orderType} onChange={e => setOrderType(e.target.value as typeof orderType)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-28">
                 <option value="market">Market</option>
                 <option value="buy_limit">Buy Limit</option>
                 <option value="sell_limit">Sell Limit</option>
@@ -329,7 +331,7 @@ export default function BotView() {
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Symbol</label>
-              <select value={symbol} onChange={e => setSymbol(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-28">
+              <select value={symbol} onChange={e => setSymbol(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-28">
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -342,31 +344,31 @@ export default function BotView() {
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Size (lots)</label>
-              <input value={size} onChange={e => setSize(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-20" />
+              <input value={size} onChange={e => setSize(e.target.value)} className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-20" />
             </div>
             {orderType !== 'market' && (
               <div>
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Trigger Price</label>
-                <input value={triggerPrice} onChange={e => setTriggerPrice(e.target.value)} placeholder="Price" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-24" />
+                <input value={triggerPrice} onChange={e => setTriggerPrice(e.target.value)} placeholder="Price" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-24" />
               </div>
             )}
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">SL</label>
-              <input value={sl} onChange={e => setSl(e.target.value)} placeholder="—" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-24" />
+              <input value={sl} onChange={e => setSl(e.target.value)} placeholder="—" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-24" />
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">TP</label>
-              <input value={tp} onChange={e => setTp(e.target.value)} placeholder="—" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-24" />
+              <input value={tp} onChange={e => setTp(e.target.value)} placeholder="—" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-24" />
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Reason</label>
-              <input value={signalReason} onChange={e => setSignalReason(e.target.value)} placeholder="e.g. RSI Oversold, BOS" className="bg-background border border-border rounded px-2 py-1.5 text-sm w-44" />
+              <input value={signalReason} onChange={e => setSignalReason(e.target.value)} placeholder="e.g. RSI Oversold, BOS" className="bg-background border border-border rounded px-2 py-1.5 text-sm w-full md:w-44" />
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Score</label>
-              <input value={signalScore} onChange={e => setSignalScore(e.target.value)} placeholder="0-10" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-14" />
+              <input value={signalScore} onChange={e => setSignalScore(e.target.value)} placeholder="0-10" className="bg-background border border-border rounded px-2 py-1.5 text-sm font-mono w-full md:w-14" />
             </div>
-            <button onClick={handlePlace} disabled={placeMut.isPending || placePendingMut.isPending} className={`px-5 py-1.5 font-bold text-xs uppercase tracking-wider rounded transition ${direction === 'long' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-red-500 hover:bg-red-400 text-white'}`}>
+            <button onClick={handlePlace} disabled={placeMut.isPending || placePendingMut.isPending} className={`col-span-2 md:col-span-1 px-5 py-1.5 font-bold text-xs uppercase tracking-wider rounded transition ${direction === 'long' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-red-500 hover:bg-red-400 text-white'}`}>
               {(placeMut.isPending || placePendingMut.isPending) ? '...' : orderType === 'market' ? `${direction === 'long' ? 'BUY' : 'SELL'} ${symbol}` : `${orderType.replace('_', ' ').toUpperCase()} ${symbol}`}
             </button>
           </div>
@@ -376,12 +378,12 @@ export default function BotView() {
       )}
 
       {/* ═══ MAIN CONTENT — Two Columns ═══ */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden min-h-0">
         {/* LEFT: Positions & History (~65%) */}
-        <div className="flex-[2] flex flex-col border-r border-border overflow-hidden min-w-0">
-          <div className="px-4 pt-3 pb-0 flex-shrink-0">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-foreground mb-2">Positions & History</h2>
-            <div className="flex gap-1 border-b border-border">
+        <div className="flex-[2] flex flex-col lg:border-r border-b lg:border-b-0 border-border overflow-hidden min-w-0">
+          <div className="px-2 md:px-4 pt-2 md:pt-3 pb-0 flex-shrink-0">
+            <h2 className="text-xs md:text-sm font-bold uppercase tracking-wider text-foreground mb-2">Positions & History</h2>
+            <div className="flex gap-0.5 md:gap-1 border-b border-border overflow-x-auto">
               {[
                 { key: 'open' as const, label: `Open Positions (${filteredPositions.length})` },
                 { key: 'pending' as const, label: `Pending (${filteredPendingOrders.length})` },
@@ -391,26 +393,28 @@ export default function BotView() {
                 <button
                   key={tab.key}
                   onClick={() => setPosTab(tab.key)}
-                  className={`px-3 py-2 text-xs font-medium transition-colors ${
+                  className={`px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-medium transition-colors whitespace-nowrap ${
                     posTab === tab.key
                       ? 'text-cyan-400 border-b-2 border-cyan-400'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {tab.label}
+                  <span className="md:hidden">{tab.key === 'open' ? `Open (${filteredPositions.length})` : tab.key === 'pending' ? `Pend (${filteredPendingOrders.length})` : tab.key === 'closedToday' ? `Today (${closedToday.length})` : 'History'}</span>
+                  <span className="hidden md:inline">{tab.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto px-4 py-2 min-h-0">
+          <div className="flex-1 overflow-auto px-2 md:px-4 py-2 min-h-0">
             {posTab === 'open' && (
               filteredPositions.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-xs md:text-sm font-mono">
                   {activeBot === 'fotsi' ? 'No FOTSI positions. Bot #2 trades will appear here.' : 'No open positions. Click "+ Order" to place a trade.'}
                 </div>
               ) : (
-                <table className="w-full text-xs font-mono">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[10px] md:text-xs font-mono min-w-[700px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -462,6 +466,7 @@ export default function BotView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )
             )}
 
@@ -471,7 +476,8 @@ export default function BotView() {
                   {activeBot === 'fotsi' ? 'No FOTSI pending orders.' : 'No pending orders.'}
                 </div>
               ) : (
-                <table className="w-full text-xs font-mono">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[10px] md:text-xs font-mono min-w-[600px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -514,6 +520,7 @@ export default function BotView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )
             )}
 
@@ -521,7 +528,8 @@ export default function BotView() {
               closedToday.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">No trades closed today.</div>
               ) : (
-                <table className="w-full text-xs font-mono">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[10px] md:text-xs font-mono min-w-[600px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -555,6 +563,7 @@ export default function BotView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )
             )}
 
@@ -564,7 +573,8 @@ export default function BotView() {
                   {activeBot === 'fotsi' ? 'No FOTSI trade history yet.' : 'No trade history yet.'}
                 </div>
               ) : (
-                <table className="w-full text-xs font-mono">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[10px] md:text-xs font-mono min-w-[700px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -604,13 +614,14 @@ export default function BotView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )
             )}
           </div>
         </div>
 
         {/* RIGHT: Account Summary + Strategy Performance (~35%) */}
-        <div className="flex-[1] flex flex-col overflow-auto min-w-[280px]">
+        <div className="flex-[1] flex flex-col overflow-auto min-w-0 lg:min-w-[280px]">
           {/* FOTSI Meter — shown when Bot #2 is active */}
           {activeBot === 'fotsi' && (
             <div className="p-3 border-b border-border">
@@ -618,8 +629,8 @@ export default function BotView() {
             </div>
           )}
           {/* Account Summary */}
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Account Summary</h3>
+          <div className="p-2 md:p-4 border-b border-border">
+            <h3 className="text-xs md:text-sm font-bold uppercase tracking-wider text-foreground mb-2 md:mb-3">Account Summary</h3>
             <div className="space-y-2">
               {[
                 { label: 'Balance', value: formatMoney(d.balance), className: 'text-foreground' },
@@ -653,8 +664,8 @@ export default function BotView() {
           </div>
 
           {/* Strategy Performance */}
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Strategy Performance</h3>
+          <div className="p-2 md:p-4 border-b border-border">
+            <h3 className="text-xs md:text-sm font-bold uppercase tracking-wider text-foreground mb-2 md:mb-3">Strategy Performance</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground">Active strategy</span>
@@ -687,8 +698,8 @@ export default function BotView() {
           </div>
 
           {/* Trade Summary Grid */}
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Trade Summary</h3>
+          <div className="p-2 md:p-4 border-b border-border">
+            <h3 className="text-xs md:text-sm font-bold uppercase tracking-wider text-foreground mb-2 md:mb-3">Trade Summary</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-card/50 rounded p-2 text-center">
                 <div className="text-lg font-bold font-mono text-foreground">{d.totalTrades}</div>
@@ -710,8 +721,8 @@ export default function BotView() {
           </div>
 
           {/* ═══ AUTONOMOUS ENGINE CONTROLS ═══ */}
-          <div className="p-4 border-t border-border">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 flex items-center gap-2">
+          <div className="p-2 md:p-4 border-t border-border">
+            <h3 className="text-xs md:text-sm font-bold uppercase tracking-wider text-foreground mb-2 md:mb-3 flex items-center gap-2">
               Autonomous Engine
               {engineState.data?.running && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -856,12 +867,12 @@ export default function BotView() {
       </div>
 
       {/* ═══ BOTTOM: Live Log ═══ */}
-      <div className="flex-shrink-0 border-t border-border" style={{ height: '200px' }}>
-        <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-card/30">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Live Log</h3>
-          <span className="text-[10px] text-muted-foreground font-mono">{d.log.length} entries</span>
+      <div className="flex-shrink-0 border-t border-border h-[120px] md:h-[200px]">
+        <div className="flex items-center justify-between px-2 md:px-4 py-1.5 border-b border-border bg-card/30">
+          <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-foreground">Live Log</h3>
+          <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">{d.log.length} entries</span>
         </div>
-        <div className="overflow-auto font-mono text-xs leading-relaxed px-4 py-2" style={{ height: 'calc(200px - 32px)' }}>
+        <div className="overflow-auto font-mono text-[10px] md:text-xs leading-relaxed px-2 md:px-4 py-1 md:py-2 h-[calc(100%-28px)]">
           {d.log.length === 0 ? (
             <div className="text-muted-foreground py-4 text-center">Paper trading engine ready. Press START to begin.</div>
           ) : (
@@ -895,12 +906,12 @@ export default function BotView() {
 
       {/* ═══ KILL SWITCH BANNER ═══ */}
       {d.killSwitchActive && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-2 flex items-center justify-between">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-red-600 text-white px-2 md:px-4 py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-lg">⚠</span>
-            <span className="font-bold text-sm uppercase tracking-wider">Kill Switch Active — All Trading Halted</span>
+            <span className="text-base md:text-lg">⚠</span>
+            <span className="font-bold text-xs md:text-sm uppercase tracking-wider">Kill Switch Active</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => emergencyCloseMut.mutate()}
               className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs font-bold uppercase rounded transition"
@@ -962,9 +973,9 @@ export default function BotView() {
 
       {/* ═══ LIVE MODE TOP BANNER ═══ */}
       {d.executionMode === 'live' && !d.killSwitchActive && (
-        <div className="fixed top-0 left-0 right-0 z-40 bg-red-600/90 text-white px-4 py-1 flex items-center justify-center gap-3">
+        <div className="fixed top-0 left-0 right-0 z-40 bg-red-600/90 text-white px-2 md:px-4 py-1 flex items-center justify-center gap-2 md:gap-3">
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-          <span className="text-xs font-bold uppercase tracking-wider">Live Trading Active — Real Money at Risk</span>
+          <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Live Trading Active</span>
           <button
             onClick={() => executionModeMut.mutate({ mode: 'paper' })}
             className="px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold uppercase rounded transition ml-2"

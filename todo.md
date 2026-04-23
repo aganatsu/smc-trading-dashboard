@@ -757,3 +757,16 @@
 - [x] Update bot-scanner FVG scoring to scale points by quality instead of flat 2.0/1.5
 - [x] FVG-Aware SL/TP: Tighten SL to unfilled FVG boundary when FVG exists between entry and SL
 - [x] FVG-Aware SL/TP: Extend TP to far edge of unfilled FVG when FVG exists between entry and TP (commit 1b856b6)
+
+## Bot View Mobile Responsiveness (April 23, 2026)
+- [x] Audit BotView layout for mobile breakpoints and fix overflow/layout issues
+- [x] Make top bar stats wrap/scroll on small screens (flex-wrap, compact text sizes)
+- [x] Stack positions table and account summary vertically on mobile (flex-col lg:flex-row)
+- [x] Wrap all 4 position tables in overflow-x-auto with min-w for horizontal scroll
+- [x] Bot selector tabs: compact padding, shorter labels on mobile, overflow-x-auto
+- [x] Order form: responsive grid layout (grid-cols-2 md:grid-cols-4)
+- [x] Ensure log terminal is usable on phone screens (120px height on mobile, smaller text)
+- [x] Kill switch banner: stack vertically on mobile (flex-col sm:flex-row)
+- [x] Live mode banner: compact text on mobile
+- [x] Right column sections: responsive padding (p-2 md:p-4)
+- [x] TypeScript: 0 errors after all changes
