@@ -730,3 +730,12 @@
 - [x] Updated scoring: -14 to +14 range, strong_trend >= 8, choppy_range <= -8
 - [x] Verify TypeScript compilation and brace balance (all 0, tsc clean)
 - [x] Commit and push to GitHub (commit 1a897ed)
+
+## OB Volume Pivot Bonus (April 23, 2026)
+- [x] Add optional volume parameter to detectOrderBlocks function (uses candle.volume directly)
+- [x] Implement volume pivot detection (highest vol in ±5 bars, LuxAlgo-inspired)
+- [x] Add volume pivot as quality bonus (+2) in OB scoring + hasVolumePivot flag
+- [x] Update bot-scanner OB detail to show volume pivot tag (candles already have volume from MetaAPI/Yahoo)
+- [x] Backtest engine already passes candles with volume — no change needed
+- [x] Verify TypeScript compilation (tsc --noEmit clean)
+- [x] Commit and push to GitHub (commit 00f0607)
