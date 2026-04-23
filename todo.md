@@ -640,3 +640,43 @@
 ## Bug: Broker SL Sync — Telegram Says Tightened But MT4/MT5 Unchanged
 - [x] Investigate: SL tightened notification sent via Telegram but actual MT4/MT5 position SL not modified (root cause: bot-scanner not deployed with broker sync fix)
 - [x] Check if this is the same bot-scanner broker sync bug (needs supabase functions deploy) — confirmed same issue, user deployed
+
+## Audit Fixes (April 22, 2026)
+
+### Fix #1: RLS on trade_archive and bot_recommendations (CRITICAL)
+- [x] Create SQL migration to enable RLS on trade_archive
+- [x] Create SQL migration to enable RLS on bot_recommendations
+- [ ] User manual: Run migration in Supabase SQL Editor
+
+### Fix #2: OANDA Broker Management Sync (CRITICAL)
+- [x] Change management sync query from eq("broker_type","metaapi") to in("broker_type",["metaapi","oanda"])
+- [x] Add OANDA branch in SL modification loop (route through broker-execute)
+- [x] Change partial TP sync query to include OANDA
+- [x] Add OANDA branch in partial TP close loop
+- [x] Change close sync query to include OANDA (already included in trade mirroring)
+- [x] Add OANDA branch in close loop (already included in trade mirroring)
+- [x] Verify broker_trade_ids stores OANDA trade IDs at entry time (confirmed in trade mirroring section)
+- [ ] Deploy bot-scanner after testing (user action)
+
+### Fix #3: Unify Telegram Notifications (CRITICAL)
+- [x] Replace direct api.telegram.org call in bot-daily-review with telegram-notify function call
+- [x] Replace direct api.telegram.org call in bot-weekly-advisor with telegram-notify function call
+- [x] Switch both from env-var TELEGRAM_CHAT_ID to user_settings telegramChatIds
+- [ ] Deploy bot-daily-review and bot-weekly-advisor (user action)
+
+### Fix #4: Input Validation on broker-execute modify_trade (HIGH)
+- [x] Add tradeId validation (required, string)
+- [x] Add stopLoss/takeProfit validation (at least one required, positive number)
+- [ ] Deploy broker-execute (user action)
+
+### Fix #5: Batch Dashboard Quote Fetches (HIGH)
+- [x] Add batch_quotes action to market-data Edge Function
+- [x] Update frontend marketApi with batchQuotes method
+- [x] Update Index.tsx to use single batch call instead of 10 parallel calls
+- [ ] Deploy market-data (user action)
+
+### Fix #6: ErrorBoundary Around Heavy Components (HIGH)
+- [x] Wrap BotView route in individual ErrorBoundary in App.tsx
+- [x] Wrap Backtest route in individual ErrorBoundary in App.tsx
+- [ ] Wrap BotConfigModal usage in ErrorBoundary (deferred — already inside BotView boundary)
+- [ ] Wrap RecommendationsDashboard usage in ErrorBoundary (deferred — already inside BotView boundary)
