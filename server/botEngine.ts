@@ -78,6 +78,35 @@ export interface ScanResult {
   rejectionReason?: string;
 }
 
+export interface StagedSetup {
+  id: string;
+  symbol: string;
+  direction: 'long' | 'short';
+  initialScore: number;
+  currentScore: number;
+  watchThreshold: number;     // Score needed to enter watchlist
+  gateThreshold: number;      // Score needed to promote to trade
+  initialFactors: ReasoningFactor[];
+  currentFactors: ReasoningFactor[];
+  missingFactors: ReasoningFactor[];
+  entryPrice: number | null;
+  slLevel: number | null;
+  tpLevel: number | null;
+  status: 'watching' | 'promoted' | 'expired' | 'invalidated';
+  scanCycles: number;
+  minCycles: number;          // Minimum cycles before promotion
+  ttlMinutes: number;
+  stagedAt: number;           // timestamp ms
+  lastEvalAt: number;         // timestamp ms
+  resolvedAt: number | null;  // timestamp ms
+  promotionReason: string | null;
+  invalidationReason: string | null;
+  setupType: string | null;
+  tier1Count: number;
+  tier2Count: number;
+  analysisSnapshot: any;
+}
+
 export interface EngineState {
   running: boolean;
   autoTrading: boolean;
@@ -90,6 +119,7 @@ export interface EngineState {
   scanResults: ScanResult[];  // Last scan results
   tradeReasonings: Map<string, TradeReasoning>;  // positionId → reasoning
   postMortems: TradePostMortem[];
+  stagedSetups: StagedSetup[];  // Setup Staging watchlist
 }
 
 // ─── Engine State ───────────────────────────────────────────────────
@@ -106,6 +136,16 @@ const state: EngineState = {
   scanResults: [],
   tradeReasonings: new Map(),
   postMortems: [],
+  stagedSetups: [],
+};
+
+// ─── Staging Config ────────────────────────────────────────────────
+const STAGING_DEFAULTS = {
+  enabled: true,
+  watchThresholdRatio: 0.5,   // Watch when score >= gate * 0.5
+  minCycles: 2,               // Must be staged for at least 2 scan cycles
+  ttlMinutes: 240,            // 4 hours default TTL
+  maxStaged: 20,              // Max concurrent staged setups
 };
 
 let scanTimer: ReturnType<typeof setInterval> | null = null;
@@ -601,6 +641,38 @@ async function persistPostMortem(
   }
 }
 
+// ─── Staging Helpers ────────────────────────────────────────────────
+
+function generateStagedId(): string {
+  return `stg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function expireStaleStagedSetups(): void {
+  const now = Date.now();
+  for (const setup of state.stagedSetups) {
+    if (setup.status !== 'watching') continue;
+    const elapsed = (now - setup.stagedAt) / 60_000;
+    if (elapsed >= setup.ttlMinutes) {
+      setup.status = 'expired';
+      setup.resolvedAt = now;
+      setup.invalidationReason = `TTL expired after ${Math.round(elapsed)}m (limit: ${setup.ttlMinutes}m)`;
+      addLog('info', `[staging] Expired ${setup.symbol} ${setup.direction} — TTL reached`);
+    }
+  }
+}
+
+function findActiveStaged(symbol: string, direction: 'long' | 'short'): StagedSetup | undefined {
+  return state.stagedSetups.find(s => s.symbol === symbol && s.direction === direction && s.status === 'watching');
+}
+
+function findActiveStagedBySymbol(symbol: string): StagedSetup | undefined {
+  return state.stagedSetups.find(s => s.symbol === symbol && s.status === 'watching');
+}
+
+function countActiveStaged(): number {
+  return state.stagedSetups.filter(s => s.status === 'watching').length;
+}
+
 // ─── Main Scan Loop ─────────────────────────────────────────────────
 
 async function runScanCycle(): Promise<void> {
@@ -619,6 +691,12 @@ async function runScanCycle(): Promise<void> {
     return;
   }
 
+  // ── Setup Staging: Expire stale setups before scanning ──
+  expireStaleStagedSetups();
+
+  const gate = config.strategy.minConfluenceScore;
+  const watchThreshold = gate * STAGING_DEFAULTS.watchThresholdRatio;
+
   // Get enabled instruments
   const enabledInstruments = Object.entries(config.instruments.allowedInstruments)
     .filter(([, enabled]) => enabled)
@@ -631,6 +709,132 @@ async function runScanCycle(): Promise<void> {
       const result = await scanInstrument(symbol, config);
       results.push(result);
 
+      // ── Setup Staging: Evaluate staging for this instrument ──
+      if (STAGING_DEFAULTS.enabled && result.analysis) {
+        const direction: 'long' | 'short' | null = result.signal === 'buy' ? 'long' : result.signal === 'sell' ? 'short'
+          : result.analysis.bias === 'bullish' ? 'long' : result.analysis.bias === 'bearish' ? 'short' : null;
+        const score = result.confluenceScore;
+
+        if (direction) {
+          // Invalidate opposite-direction staged setups
+          const oppositeDir = direction === 'long' ? 'short' : 'long';
+          const oppositeStaged = findActiveStaged(symbol, oppositeDir);
+          if (oppositeStaged) {
+            oppositeStaged.status = 'invalidated';
+            oppositeStaged.resolvedAt = Date.now();
+            oppositeStaged.invalidationReason = `Direction reversed to ${direction} (score ${score}/10)`;
+            addLog('info', `[staging] Invalidated ${symbol} ${oppositeDir} — direction reversed`);
+          }
+
+          const existingStaged = findActiveStaged(symbol, direction);
+
+          // SL invalidation check
+          if (existingStaged && existingStaged.slLevel) {
+            const lastPrice = result.analysis.orderBlocks?.[0]?.high || 0; // approximate
+            const slBreached = direction === 'long'
+              ? lastPrice < existingStaged.slLevel
+              : lastPrice > existingStaged.slLevel;
+            if (slBreached && lastPrice > 0) {
+              existingStaged.status = 'invalidated';
+              existingStaged.resolvedAt = Date.now();
+              existingStaged.invalidationReason = `SL level breached`;
+              addLog('info', `[staging] Invalidated ${symbol} ${direction} — SL breached`);
+              continue; // Skip further processing for this symbol
+            }
+          }
+
+          if (score >= gate) {
+            // Score is above gate — check if this is a staged setup being promoted
+            if (existingStaged) {
+              if (existingStaged.scanCycles >= STAGING_DEFAULTS.minCycles) {
+                // PROMOTE: staged long enough and score above gate
+                existingStaged.status = 'promoted';
+                existingStaged.currentScore = score;
+                existingStaged.resolvedAt = Date.now();
+                existingStaged.promotionReason = `Score reached ${score}/10 after ${existingStaged.scanCycles + 1} cycles`;
+                existingStaged.scanCycles++;
+                existingStaged.lastEvalAt = Date.now();
+                addLog('signal', `[staging] PROMOTED ${symbol} ${direction} — score ${score}/10 after ${existingStaged.scanCycles} cycles`);
+                // Let the normal signal flow handle the trade
+              } else {
+                // Above gate but not enough cycles — update and wait
+                existingStaged.currentScore = score;
+                existingStaged.scanCycles++;
+                existingStaged.lastEvalAt = Date.now();
+                existingStaged.currentFactors = result.reasoning.factors.filter(f => f.present);
+                existingStaged.missingFactors = result.reasoning.factors.filter(f => !f.present && f.weight > 0);
+                addLog('info', `[staging] ${symbol} ${direction} score ${score}/10 — above gate but needs ${STAGING_DEFAULTS.minCycles - existingStaged.scanCycles + 1} more cycle(s)`);
+                // Don't trade yet — skip the normal signal flow
+                result.signal = 'no_signal';
+                result.rejectionReason = `Staged: confirming (cycle ${existingStaged.scanCycles}/${STAGING_DEFAULTS.minCycles})`;
+                continue;
+              }
+            }
+            // If not staged, it's a fresh signal above gate — let it trade normally
+          } else if (score >= watchThreshold && score < gate) {
+            // Score is in the watch zone — stage or update
+            const presentFactors = result.reasoning.factors.filter(f => f.present);
+            const tier1Count = presentFactors.filter(f => f.weight >= 2).length;
+
+            if (tier1Count >= 1) {
+              if (existingStaged) {
+                // Update existing staged setup
+                existingStaged.currentScore = score;
+                existingStaged.scanCycles++;
+                existingStaged.lastEvalAt = Date.now();
+                existingStaged.currentFactors = presentFactors;
+                existingStaged.missingFactors = result.reasoning.factors.filter(f => !f.present && f.weight > 0);
+                addLog('info', `[staging] Updated ${symbol} ${direction} — score ${score}/10 (cycle ${existingStaged.scanCycles})`);
+              } else if (countActiveStaged() < STAGING_DEFAULTS.maxStaged) {
+                // Create new staged setup
+                const newStaged: StagedSetup = {
+                  id: generateStagedId(),
+                  symbol,
+                  direction,
+                  initialScore: score,
+                  currentScore: score,
+                  watchThreshold,
+                  gateThreshold: gate,
+                  initialFactors: presentFactors,
+                  currentFactors: presentFactors,
+                  missingFactors: result.reasoning.factors.filter(f => !f.present && f.weight > 0),
+                  entryPrice: null,
+                  slLevel: null,
+                  tpLevel: null,
+                  status: 'watching',
+                  scanCycles: 1,
+                  minCycles: STAGING_DEFAULTS.minCycles,
+                  ttlMinutes: STAGING_DEFAULTS.ttlMinutes,
+                  stagedAt: Date.now(),
+                  lastEvalAt: Date.now(),
+                  resolvedAt: null,
+                  promotionReason: null,
+                  invalidationReason: null,
+                  setupType: result.analysis.bias || null,
+                  tier1Count,
+                  tier2Count: presentFactors.filter(f => f.weight >= 1 && f.weight < 2).length,
+                  analysisSnapshot: {
+                    score,
+                    bias: result.analysis.bias,
+                    trend: result.analysis.structure?.trend,
+                    session: result.analysis.session?.name,
+                  },
+                };
+                state.stagedSetups.push(newStaged);
+                addLog('info', `[staging] NEW ${symbol} ${direction} — score ${score}/10 (watch: ${watchThreshold.toFixed(1)}, gate: ${gate})`);
+              }
+            }
+          } else if (existingStaged && score < watchThreshold) {
+            // Score dropped below watch threshold — invalidate
+            existingStaged.status = 'invalidated';
+            existingStaged.resolvedAt = Date.now();
+            existingStaged.invalidationReason = `Score dropped to ${score}/10 (below watch threshold ${watchThreshold.toFixed(1)})`;
+            addLog('info', `[staging] Invalidated ${symbol} ${direction} — score dropped below watch threshold`);
+          }
+        }
+      }
+
+      // Normal signal processing (unchanged)
       if (result.signal !== 'no_signal') {
         state.totalSignals++;
         addLog('signal', `SIGNAL: ${result.signal.toUpperCase()} ${symbol} (score: ${result.confluenceScore}/10)`);
@@ -660,6 +864,13 @@ async function runScanCycle(): Promise<void> {
   }
 
   state.scanResults = results;
+
+  // Trim resolved staged setups (keep last 50)
+  const resolved = state.stagedSetups.filter(s => s.status !== 'watching');
+  if (resolved.length > 50) {
+    const toRemove = resolved.slice(0, resolved.length - 50);
+    state.stagedSetups = state.stagedSetups.filter(s => !toRemove.includes(s));
+  }
 }
 
 // ─── Post-Mortem Generation ─────────────────────────────────────────
@@ -787,6 +998,7 @@ export function getEngineState(): Omit<EngineState, 'tradeReasonings'> & { trade
     scanResults: state.scanResults,
     tradeReasonings: reasoningsObj,
     postMortems: state.postMortems,
+    stagedSetups: state.stagedSetups,
   };
 }
 
@@ -796,6 +1008,26 @@ export function getTradeReasoning(positionId: string): TradeReasoning | null {
 
 export function getPostMortems(): TradePostMortem[] {
   return [...state.postMortems];
+}
+
+// ─── Staging Public API ───────────────────────────────────────────────
+
+export function getActiveStagedSetups(): StagedSetup[] {
+  return state.stagedSetups.filter(s => s.status === 'watching');
+}
+
+export function getAllStagedSetups(): StagedSetup[] {
+  return [...state.stagedSetups];
+}
+
+export function dismissStagedSetup(setupId: string): boolean {
+  const setup = state.stagedSetups.find(s => s.id === setupId && s.status === 'watching');
+  if (!setup) return false;
+  setup.status = 'invalidated';
+  setup.resolvedAt = Date.now();
+  setup.invalidationReason = 'Manually dismissed by user';
+  addLog('info', `[staging] Dismissed ${setup.symbol} ${setup.direction} by user`);
+  return true;
 }
 
 export function getLastScanResults(): ScanResult[] {

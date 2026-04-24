@@ -770,3 +770,17 @@
 - [x] Live mode banner: compact text on mobile
 - [x] Right column sections: responsive padding (p-2 md:p-4)
 - [x] TypeScript: 0 errors after all changes
+
+## Bug: FX Market Session Detection (April 23, 2026)
+- [x] Fix "FX market closed (weekend)" showing during active trading hours — was using UTC day instead of NY day (commit 172b16f)
+
+- [x] Setup Staging: Create staged_setups Supabase table (symbol, direction, score, factors, staged_at, ttl, sl_level, status)
+- [x] Setup Staging: Bot-scanner watch threshold logic — stage setups scoring between watch_threshold and minConfluence
+- [x] Setup Staging: Bot-scanner promotion logic — promote staged setup to trade when score reaches gate + staged >=1 cycle
+- [x] Setup Staging: Bot-scanner invalidation logic — discard when SL breached, TTL expired, or score drops below watch threshold
+- [x] Setup Staging: Bot-scanner re-evaluation priority — check staged setups first before fresh pair scanning
+- [x] Setup Staging: Config fields (watchThreshold, stagingTTLMinutes, minStagingCycles, stagingEnabled)
+- [x] Setup Staging: BotView Watching panel UI (connect-assist) — show staged setups with score, time remaining, missing factors
+- [x] Setup Staging: BotView Watching panel UI (smc-trading-dashboard) — mirror panel
+- [x] Setup Staging: Include staging data in bot-scanner response for frontend consumption
+- [x] Setup Staging: Vitest tests for staging types and public API (9 tests)

@@ -5,6 +5,7 @@ import { getLoginUrl } from '@/const';
 import BotConfigPanel from '@/components/BotConfigPanel';
 import FOTSIMeter from '@/components/FOTSIMeter';
 import FOTSIConfigPanel from '@/components/FOTSIConfigPanel';
+import WatchlistPanel from '@/components/WatchlistPanel';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -818,6 +819,9 @@ export default function BotView() {
                 ))}
               </div>
             )}
+
+            {/* Setup Staging Watchlist */}
+            <WatchlistPanel />
 
             {/* Last Scan Results */}
             <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Latest Scan Results</h4>

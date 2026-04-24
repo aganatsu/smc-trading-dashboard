@@ -72,6 +72,9 @@ import {
   getLastScanResults,
   triggerManualScan,
   generatePostMortem,
+  getActiveStagedSetups,
+  getAllStagedSetups,
+  dismissStagedSetup,
 } from "./botEngine";
 import { getFundamentalsData, getEventsForPair, hasUpcomingHighImpact } from "./fundamentals";
 import { runBacktest, getBacktestProgress, getLastBacktestResult } from "./backtest";
@@ -902,9 +905,24 @@ export const appRouter = router({
         }
         return null;
       }),
+    // ─── Setup Staging ─────────────────────────────────────────────
+    stagedSetups: publicProcedure.query(() => {
+      return getActiveStagedSetups();
+    }),
+
+    allStagedSetups: publicProcedure.query(() => {
+      return getAllStagedSetups();
+    }),
+
+    dismissStaged: protectedProcedure
+      .input(z.object({ setupId: z.string() }))
+      .mutation(({ input }) => {
+        const success = dismissStagedSetup(input.setupId);
+        return { success };
+      }),
   }),
 
-  // ─── Backtest Engine ──────────────────────────────────────────────
+  // ─── Backtest Engine ────────────────────────────────────────────
   backtest: router({
     run: protectedProcedure
       .input(z.object({
