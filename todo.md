@@ -797,3 +797,18 @@
 - [x] Audit: Config inheritance chain — default → style overrides → pair-specific overrides edge cases
 - [x] Audit: Session/kill zone logic interaction with regime detection
 - [x] Compile and deliver full broader audit report
+## Broader Audit Fixes — MODERATE Severity (April 26, 2026)
+- [x] L1: Use actual candle touch price instead of limit price for paper position entry on fill
+- [x] L3: Add Gate 4/5 (max positions, max per symbol) check at limit order fill time
+- [x] B1: Remove symbol+direction fallback from SL modify — require comment-tag match only
+- [x] B2: Change management SL fallback to skip (not try-all) when mirrored_connection_ids is empty
+- [x] B4: Add fetchBrokerSpread() check to limit order fill broker mirror path
+- [x] I1: Replace identity check with provenance tracking for STYLE_OVERRIDES
+- [x] I2: Add tpRatio to userProtectedFields set
+## Broader Audit Fixes — LOW Severity Quick Wins (April 26, 2026)
+- [ ] I5: Add allowSameDirectionStacking: false to DEFAULTS
+- [ ] I6: Add scanIntervalMinutes: 15 to DEFAULTS
+- [ ] I7: Add maxHoldEnabled: false to DEFAULTS
+- [x] S3: Capture session once at scan start and pass as parameter
+- [ ] Verify all broader audit fixes compile cleanly (brace balance)
+- [ ] Commit and push all broader audit fixes to GitHub
