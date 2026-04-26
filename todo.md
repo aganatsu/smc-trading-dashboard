@@ -784,3 +784,16 @@
 - [x] Setup Staging: BotView Watching panel UI (smc-trading-dashboard) — mirror panel
 - [x] Setup Staging: Include staging data in bot-scanner response for frontend consumption
 - [x] Setup Staging: Vitest tests for staging types and public API (9 tests)
+## Contradiction Fixes C4-C7 (April 26, 2026)
+- [x] C4: Pass entryTimeframe to scannerManagement — use it for structure invalidation candle selection instead of hardcoded 15m
+- [x] C5: Align Factor 22 (Daily Bias) and Gate 1 (HTF Bias) ranging tolerance — consistent treatment of ranging daily
+- [x] C6: After close-on-reverse, splice closed positions from openPosArr so Gate 4/5 counts are accurate for remaining pairs
+- [x] C7: Add post-direction weight adjustment for Factor 1 (Market Structure) — counter-trend structure should get reduced score
+- [x] Verify all C4-C7 fixes compile cleanly (tsc + brace balance)
+- [x] Commit and push C4-C7 fixes to GitHub
+## Broader Systematic Audit (April 26, 2026)
+- [x] Audit: Limit order fill path — does pending_orders → paper_positions correctly inherit all analysis data?
+- [x] Audit: Broker mirroring race conditions — can two scan cycles place the same trade?
+- [x] Audit: Config inheritance chain — default → style overrides → pair-specific overrides edge cases
+- [x] Audit: Session/kill zone logic interaction with regime detection
+- [x] Compile and deliver full broader audit report
