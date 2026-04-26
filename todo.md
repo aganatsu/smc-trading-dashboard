@@ -830,3 +830,11 @@
 - [x] Root cause: esm.sh /cors import + version mismatch (v2.103.2 + v2.95.0) causing cold-start timeout
 - [x] Fix: Replaced esm.sh cors import with local _shared/cors.ts across all 12 Edge Functions
 - [x] Push fix to GitHub — commit 2a25937
+
+## Feature: Dynamic Scan Skip When Max Positions Reached (April 26, 2026)
+- [x] Add early exit check: if openPosArr.length >= maxOpenTrades, skip per-pair analysis loop
+- [x] Still run: price refresh + management (trailing SL, break-even, partial TP, close-on-reverse)
+- [x] Read maxOpenTrades from live config each cycle (fully dynamic, no hardcoded numbers)
+- [x] Log clearly: "Max positions reached (X/Y) — management only, skipping new entry scan"
+- [x] Resumes scanning automatically when positions close or maxOpenTrades config increases
+- [x] Push to GitHub — commit 45673bf
