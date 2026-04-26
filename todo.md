@@ -818,3 +818,15 @@
 - [x] Check if paper trading engine price monitoring loop is running
 - [x] Fix the issue — added price refresh via fetchCandles before management (commit 690380a)
 - [ ] Verify positions update with live prices (requires deploy to Supabase)
+
+## Bug: broker-execute RUNTIME_ERROR (April 26, 2026)
+- [x] Investigate RUNTIME_ERROR in broker-execute/index.ts
+- [x] Root cause: esm.sh /cors import causing cold-start timeout on Deno boot
+- [x] Fix: Replaced esm.sh cors import with local _shared/cors.ts
+- [x] Push fix to GitHub — commit 2a25937
+
+## Bug: paper-trading RUNTIME_ERROR 503 (April 26, 2026)
+- [x] Investigate boot-time crash in paper-trading/index.ts (lineno:0, colno:0, stack:not_applicable)
+- [x] Root cause: esm.sh /cors import + version mismatch (v2.103.2 + v2.95.0) causing cold-start timeout
+- [x] Fix: Replaced esm.sh cors import with local _shared/cors.ts across all 12 Edge Functions
+- [x] Push fix to GitHub — commit 2a25937
