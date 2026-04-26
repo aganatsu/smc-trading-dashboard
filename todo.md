@@ -806,9 +806,15 @@
 - [x] I1: Replace identity check with provenance tracking for STYLE_OVERRIDES
 - [x] I2: Add tpRatio to userProtectedFields set
 ## Broader Audit Fixes — LOW Severity Quick Wins (April 26, 2026)
-- [ ] I5: Add allowSameDirectionStacking: false to DEFAULTS
-- [ ] I6: Add scanIntervalMinutes: 15 to DEFAULTS
-- [ ] I7: Add maxHoldEnabled: false to DEFAULTS
+- [x] I5: allowSameDirectionStacking: false already in DEFAULTS (line 65)
+- [x] I6: scanIntervalMinutes: 15 already in DEFAULTS (line 110)
+- [x] I7: maxHoldEnabled: false already in DEFAULTS (line 120)
 - [x] S3: Capture session once at scan start and pass as parameter
-- [ ] Verify all broader audit fixes compile cleanly (brace balance)
-- [ ] Commit and push all broader audit fixes to GitHub
+- [x] Verify all broader audit fixes compile cleanly (brace balance) — 0 diff braces, 0 diff brackets
+- [x] Commit and push all broader audit fixes to GitHub — commit a6ba473
+
+## Bug: Paper Trading Positions Show +0.0 P&L — Not Updating (April 26, 2026)
+- [x] Investigate why positions show current price = entry price and +0.0 P&L
+- [x] Check if paper trading engine price monitoring loop is running
+- [x] Fix the issue — added price refresh via fetchCandles before management (commit 690380a)
+- [ ] Verify positions update with live prices (requires deploy to Supabase)
