@@ -883,12 +883,18 @@
 - [x] Fix Inconsistency: Journal daily P&L should group by exit_time (closedAt) not entry_time
 
 ## Max Trades Scan-Stop (April 26, 2026)
-- [ ] Implement: when open positions >= max_open_positions, skip scanning entirely (don't waste API calls)
-- [ ] Add log message: "Scan skipped — at max positions (X/X)" 
-- [ ] Still run management on existing positions even when scan is skipped
-- [ ] Push to GitHub
+- [x] Implement: when open positions >= max_open_positions, skip scanning entirely (don't waste API calls)
+- [x] Add log message: "Scan skipped — at max positions (X/X)" 
+- [x] Still run management on existing positions even when scan is skipped
+- [x] Push to GitHub
 
 ## Bug Fix: Scan-Stop Not Firing (April 27, 2026)
 - [x] Fix: scan-stop at line 4358 not skipping scan loop when at max positions — bulletproofed with parseInt + openPosArr.length (commit 5679ac9)
-- [ ] Verify: currentOpenCount is calculated correctly before the scan loop
-- [ ] Push fix to GitHub
+- [x] Verify: currentOpenCount is calculated correctly before the scan loop
+- [x] Push fix to GitHub
+
+## CRITICAL BUG: Trailing SL Not Closing Position (April 27, 2026)
+- [x] Fix: management engine updates SL in DB but doesn't check if current price has already breached it
+- [x] Fix: BTC/USD BUY position has trailing SL at 79398.30 but current price is 77828.39 — should have been stopped out
+- [x] Add SL/TP breach check in bot-scanner after price refresh + rateMap build (line 4001) — checks all open positions, closes breached ones with full close pattern (commit ecf1c59)
+- [x] Push fix to GitHub (commit ecf1c59)
