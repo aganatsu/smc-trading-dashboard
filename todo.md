@@ -898,3 +898,37 @@
 - [x] Fix: BTC/USD BUY position has trailing SL at 79398.30 but current price is 77828.39 — should have been stopped out
 - [x] Add SL/TP breach check in bot-scanner after price refresh + rateMap build (line 4001) — checks all open positions, closes breached ones with full close pattern (commit ecf1c59)
 - [x] Push fix to GitHub (commit ecf1c59)
+
+## Premarket Game Plan — Automatic Session Analysis (April 27, 2026)
+
+### Backend: Game Plan Engine
+- [x] Build gamePlan.ts shared module — pre-session analysis engine (909 lines, commit 4d28e53)
+- [x] DOL (Draw on Liquidity) identification — find nearest unmitigated liquidity pools (equal highs/lows, old swing points) and determine likely draw direction
+- [x] HTF bias determination — analyze D1/4H structure (BOS/CHoCH, premium/discount, trend direction) to set bullish/bearish/neutral bias per instrument
+- [x] Key level mapping — auto-mark PD H/L/O/C, PW H/L, significant OBs, FVGs, liquidity pools for the session
+- [x] Scenario planning — generate "if X then Y" conditional trade plans per instrument
+- [x] Regime-aware filtering — use regime classifier (trending/ranging/volatile/quiet) to adjust game plan aggressiveness
+- [x] Session-specific game plan — separate plans for London, NY, Asian sessions
+- [x] Store game plan in scan_logs (type: game_plan) with session, bias, DOL, key levels, scenarios, confidence, news events
+
+### Backend: Scanner Integration
+- [x] Game plan runs every scan cycle (auto-detects current session) — no separate trigger needed
+- [x] Add game plan gate in scanner — check signal direction against game plan bias before placing trade
+- [x] Reject misaligned trades with clear reason: "Game plan: long REJECTED — bias is bearish (75%), signal is long"
+- [x] Fall back to existing confluence scoring when no game plan exists for a pair
+- [x] Game plan regenerates every scan cycle — automatically reflects structure changes
+
+### Backend: Economic Calendar
+- [x] Integrated with existing fundamentals function (ForexFactory data via faireconomy.media)
+- [x] Flag high-impact events (NFP, CPI, FOMC, rate decisions) with time + affected currencies
+- [x] News events enriched into game plan summary (existing news filter gate already handles trade blocking)
+
+### Backend: Telegram Notification
+- [x] Send game plan summary to Telegram (bias, DOL, focus pairs, scenarios, news events)
+- [x] Trade rejections include game plan reason in gates (attached to scan detail)
+
+### Frontend: Game Plan UI
+- [ ] Game Plan panel in BotView — show today's session plan (data available via scan_logs type=game_plan)
+- [ ] Visual bias indicators (bullish green, bearish red, neutral gray) per instrument
+- [ ] News/events timeline showing upcoming high-impact events
+- [ ] Game plan history — view past game plans and how they played out vs actual trades (data stored in scan_logs)
