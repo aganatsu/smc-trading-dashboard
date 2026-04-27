@@ -928,7 +928,7 @@
 - [x] Trade rejections include game plan reason in gates (attached to scan detail)
 
 ### Frontend: Game Plan UI
-- [ ] Game Plan panel in BotView — show today's session plan (data available via scan_logs type=game_plan)
-- [ ] Visual bias indicators (bullish green, bearish red, neutral gray) per instrument
-- [ ] News/events timeline showing upcoming high-impact events
-- [ ] Game plan history — view past game plans and how they played out vs actual trades (data stored in scan_logs)
+- [x] Game Plan panel in BotView — new tab + dedicated /game-plan page + sidebar nav (commit c428026)
+- [x] Visual bias indicators (emerald=bullish, red=bearish, zinc=neutral) per instrument with confidence %
+- [x] News/events timeline showing upcoming high-impact events with impact badges and past-event dimming
+- [x] Game plan history — view last 10 game plans with session selector (data stored in scan_logs)
