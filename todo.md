@@ -843,7 +843,12 @@
 - [x] Add trade_overrides JSON column to paper_positions table (SQL provided, user needs to run)
 - [x] Backend: management function reads per-trade overrides before applying global config
 - [x] Backend: paper-trading update_position extended to accept tradeOverrides payload
-- [ ] Frontend (Lovable): per-trade edit UI (edit SL price, toggle BE on/off, toggle trailing on/off, adjust trailing distance)
-- [ ] Frontend: visual indicator showing which trades have custom overrides
+- [x] Frontend (Lovable): per-trade edit UI (edit SL price, toggle BE on/off, toggle trailing on/off, adjust trailing distance)
+- [x] Frontend: visual indicator showing which trades have custom overrides
 - [x] Push backend changes to GitHub (connect-assist) — commit 0029745
-- [ ] Push frontend changes to Lovable
+- [x] Push frontend changes to Lovable (commit 85b1554 — TradeOverrideEditor.tsx + integration guide)
+
+## Entry & Exit Logic Audit (April 26, 2026)
+- [ ] Full audit: verify bot scanner entry logic uses all recent upgrades (ZigZag pivots, Fib 2-pivot, OB scan-back, FVG quality, regime classifier)
+- [ ] Full audit: verify bot scanner exit/management logic uses all recent upgrades (per-trade overrides, structure invalidation, close-on-reverse)
+- [ ] Compile entry/exit audit report and deliver to user
