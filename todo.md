@@ -940,3 +940,13 @@
 - [x] Add config: gamePlanEnabled, gamePlanNotify, gamePlanRefreshHours, gamePlanFilterEnabled, gamePlanMinConfidence
 - [x] Build Game Plan tab in BotConfigModal with all settings + search index entries
 - [x] Push fixes to GitHub (commit defb139)
+
+## Correlation Gate — Prevent Conflicting/Doubling Trades
+- [x] Build Gate 22: Correlation Filter in runSafetyGates (commit 7ebc76f)
+- [x] Anti-correlation block: reject trades that conflict with open positions (e.g., long EUR/USD + long USD/CHF)
+- [x] Positive correlation limit: cap same-direction correlated pairs to maxCorrelatedPositions
+- [x] Use SMT_PAIRS mapping + currency decomposition for correlation detection
+- [x] Configurable: correlationFilterEnabled (default OFF), maxCorrelatedPositions (default 1)
+- [x] Add maxCorrelatedPositions setting to bot-config defaults + BotConfigModal BASE_CONFIG
+- [x] Wire BotConfigModal: Correlation Filter section in Instruments tab + search index entries
+- [x] Push to GitHub (commit 7ebc76f)
