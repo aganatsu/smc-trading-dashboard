@@ -950,3 +950,13 @@
 - [x] Add maxCorrelatedPositions setting to bot-config defaults + BotConfigModal BASE_CONFIG
 - [x] Wire BotConfigModal: Correlation Filter section in Instruments tab + search index entries
 - [x] Push to GitHub (commit 7ebc76f)
+
+## AUDIT: Ensure Bot Scanner Actively Uses News + Correlation + Game Plan
+- [x] Audit: traced full decision flow — all 3 systems are enforced gates in bot-scanner
+- [x] Verify: Gate 16 (News) ACTIVE — blocks trades within newsFilterPauseMinutes of high-impact events
+- [x] Verify: Gate 22 (Correlation) ACTIVE — blocks anti-correlated + caps same-direction correlated pairs
+- [x] Verify: Game Plan Filter ACTIVE — rejects misaligned trades when confidence >= threshold
+- [x] Built newsImpact.ts (400+ lines): classifies 15+ event categories, interprets actual/forecast/previous (commit 0d8f336)
+- [x] News directional bias enriches each instrument plan (newsBias, newsConfirmation, newsConflict)
+- [x] All gates produce clear rejection reasons in scan detail + logs. News alignment gate added (blocks at 40%, warns at 25%, confirms at 30%)
+- [x] Push verified/enhanced code to GitHub (commit 0d8f336)
