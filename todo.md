@@ -849,6 +849,12 @@
 - [x] Push frontend changes to Lovable (commit 85b1554 — TradeOverrideEditor.tsx + integration guide)
 
 ## Entry & Exit Logic Audit (April 26, 2026)
-- [ ] Full audit: verify bot scanner entry logic uses all recent upgrades (ZigZag pivots, Fib 2-pivot, OB scan-back, FVG quality, regime classifier)
-- [ ] Full audit: verify bot scanner exit/management logic uses all recent upgrades (per-trade overrides, structure invalidation, close-on-reverse)
-- [ ] Compile entry/exit audit report and deliver to user
+- [x] Full audit: verify bot scanner entry logic uses all recent upgrades (ZigZag pivots, Fib 2-pivot, OB scan-back, FVG quality, regime classifier)
+- [x] Full audit: verify bot scanner exit/management logic uses all recent upgrades (per-trade overrides, structure invalidation, close-on-reverse)
+- [x] Compile entry/exit audit report and deliver to user
+
+## Bug Fix: Locked R / Locked P&L Display (April 26, 2026)
+- [x] Fix: originalSl derivation uses trailingStopPips (trail distance) instead of true original SL
+- [x] Fix: lockedR should use the true original SL distance as denominator
+- [x] Fix: lockedPnl should be capped — cannot exceed current floating P&L
+- [x] Push fix to GitHub for Lovable (commit 22f505b)
