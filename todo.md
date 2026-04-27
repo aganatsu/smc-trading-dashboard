@@ -932,3 +932,11 @@
 - [x] Visual bias indicators (emerald=bullish, red=bearish, zinc=neutral) per instrument with confidence %
 - [x] News/events timeline showing upcoming high-impact events with impact badges and past-event dimming
 - [x] Game plan history — view last 10 game plans with session selector (data stored in scan_logs)
+
+## Fix: Game Plan Notification Spam + Settings UI
+- [x] Fix: game plan now runs once per session with dedup check (commit defb139)
+- [x] Add session-based dedup: check scan_logs (contains filter type=game_plan) for existing plan
+- [x] Only send Telegram notification when a NEW game plan is generated (cached reuses skip notification)
+- [x] Add config: gamePlanEnabled, gamePlanNotify, gamePlanRefreshHours, gamePlanFilterEnabled, gamePlanMinConfidence
+- [x] Build Game Plan tab in BotConfigModal with all settings + search index entries
+- [x] Push fixes to GitHub (commit defb139)
