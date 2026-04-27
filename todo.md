@@ -873,3 +873,22 @@
 - [x] Audit: frontend BotView table — R-multiple column, P&L, pips, BE/trail status
 - [x] Audit: Dashboard account calculations — equity, margin, drawdown, win rate, profit factor
 - [x] Compile comprehensive calculation audit report
+
+## Calculation Audit Bug Fixes (April 26, 2026)
+- [x] Fix Bug 1: Align pip sizes — backend SPECS BTC/USD=1.0 vs frontend INSTRUMENTS BTC/USD=0.01; remove getPipSize() and use INSTRUMENTS everywhere
+- [x] Fix Bug 2: Add BE trigger R clamp [1.0, 2.0] in ExpandedPositionCard to match backend
+- [x] Fix Bug 3: Journal equity curve — use actual account balance instead of hardcoded $10,000
+- [x] Fix Bug 4: Clean up dead ternary in BotView origSl fallback
+- [x] Fix Bug 5: Remove getPipSize() duplication — ExpandedPositionCard should use INSTRUMENTS lookup
+- [x] Fix Inconsistency: Journal daily P&L should group by exit_time (closedAt) not entry_time
+
+## Max Trades Scan-Stop (April 26, 2026)
+- [ ] Implement: when open positions >= max_open_positions, skip scanning entirely (don't waste API calls)
+- [ ] Add log message: "Scan skipped — at max positions (X/X)" 
+- [ ] Still run management on existing positions even when scan is skipped
+- [ ] Push to GitHub
+
+## Bug Fix: Scan-Stop Not Firing (April 27, 2026)
+- [x] Fix: scan-stop at line 4358 not skipping scan loop when at max positions — bulletproofed with parseInt + openPosArr.length (commit 5679ac9)
+- [ ] Verify: currentOpenCount is calculated correctly before the scan loop
+- [ ] Push fix to GitHub
