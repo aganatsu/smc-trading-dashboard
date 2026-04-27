@@ -960,3 +960,8 @@
 - [x] News directional bias enriches each instrument plan (newsBias, newsConfirmation, newsConflict)
 - [x] All gates produce clear rejection reasons in scan detail + logs. News alignment gate added (blocks at 40%, warns at 25%, confirms at 30%)
 - [x] Push verified/enhanced code to GitHub (commit 0d8f336)
+
+## Bug Fix: Game Plan Notifications Keep Firing Despite 4-Hour Refresh Setting
+- [x] Read and debug the game plan dedup logic in bot-scanner — found 3 bugs
+- [x] Fix: added error handling, JS fallback query, debug logging (commit 2624daf)
+- [x] Push fix to GitHub (commit 2624daf)
