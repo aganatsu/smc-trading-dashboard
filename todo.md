@@ -858,3 +858,18 @@
 - [x] Fix: lockedR should use the true original SL distance as denominator
 - [x] Fix: lockedPnl should be capped — cannot exceed current floating P&L
 - [x] Push fix to GitHub for Lovable (commit 22f505b)
+
+## Full Calculation Audit (April 26, 2026)
+- [x] Audit: bot-scanner SL/TP placement (calculateSLTP function)
+- [x] Audit: bot-scanner position sizing (calculatePositionSize function)
+- [x] Audit: bot-scanner commission-adjusted R:R gate
+- [x] Audit: bot-scanner spread filter calculation
+- [x] Audit: management engine R-multiple calculation
+- [x] Audit: management engine break-even trigger and activation math
+- [x] Audit: management engine trailing stop activation, tightening, and proportional trail
+- [x] Audit: management engine partial TP level and size reduction
+- [x] Audit: management engine max hold time calculation
+- [x] Audit: frontend ExpandedPositionCard — R-multiple, locked R, locked P&L, pips, dollar/pip, BE/trail/partial displays
+- [x] Audit: frontend BotView table — R-multiple column, P&L, pips, BE/trail status
+- [x] Audit: Dashboard account calculations — equity, margin, drawdown, win rate, profit factor
+- [x] Compile comprehensive calculation audit report
