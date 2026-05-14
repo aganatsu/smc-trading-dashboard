@@ -45,6 +45,234 @@ const SYMBOLS = [
   'BTC/USD', 'ETH/USD',
 ];
 
+// ─── Trade Detail Sub-Components ────────────────────────────────────
+
+interface TradeRowProps {
+  trade: { id: string; symbol: string; direction: string; entryPrice: number; exitPrice: number; pnl: number; size: number; closeReason: string; signalReason: string };
+  expanded: boolean;
+  onToggle: () => void;
+  colSpan: number;
+}
+
+function TradeRow({ trade: t, expanded, onToggle, colSpan }: TradeRowProps) {
+  return (
+    <>
+      <tr className={`border-b border-border/50 hover:bg-card/50 transition-colors cursor-pointer ${expanded ? 'bg-card/60' : ''}`} onClick={onToggle}>
+        <td className="py-2 pl-1 text-center text-muted-foreground">
+          <span className={`inline-block transition-transform text-[10px] ${expanded ? 'rotate-90' : ''}`}>▶</span>
+        </td>
+        <td className="py-2 pr-2 font-bold text-foreground">{t.symbol.replace('/', '')}</td>
+        <td className="py-2 pr-2">
+          <span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
+            {t.direction === 'long' ? 'Long \u2191' : 'Short \u2193'}
+          </span>
+        </td>
+        <td className="py-2 pr-2 text-right text-foreground">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
+        <td className="py-2 pr-2 text-right text-foreground">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
+        <td className={`py-2 pr-2 text-right font-bold ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {formatMoney(t.pnl, true)}
+        </td>
+        <td className="py-2 pr-2 text-right text-foreground">{t.size.toFixed(2)}</td>
+        <td className="py-2 pr-2 text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</td>
+        <td className="py-2 text-yellow-400/80 truncate max-w-[160px]">{t.signalReason}</td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={colSpan} className="p-0">
+            <TradeDetailPanel tradeId={t.id} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+interface HistoryRowProps {
+  trade: { id: string; symbol: string; direction: string; entryPrice: number; exitPrice: number; pnl: number; pnlPips: number; size: number; closeReason: string; signalReason: string; closedAt: string };
+  expanded: boolean;
+  onToggle: () => void;
+  colSpan: number;
+}
+
+function HistoryRow({ trade: t, expanded, onToggle, colSpan }: HistoryRowProps) {
+  return (
+    <>
+      <tr className={`border-b border-border/50 hover:bg-card/50 transition-colors cursor-pointer ${expanded ? 'bg-card/60' : ''}`} onClick={onToggle}>
+        <td className="py-2 pl-1 text-center text-muted-foreground">
+          <span className={`inline-block transition-transform text-[10px] ${expanded ? 'rotate-90' : ''}`}>▶</span>
+        </td>
+        <td className="py-2 pr-2 font-bold text-foreground">{t.symbol.replace('/', '')}</td>
+        <td className="py-2 pr-2">
+          <span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
+            {t.direction === 'long' ? 'L' : 'S'}
+          </span>
+        </td>
+        <td className="py-2 pr-2 text-right">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
+        <td className="py-2 pr-2 text-right">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
+        <td className={`py-2 pr-2 text-right font-bold ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {formatMoney(t.pnl, true)}
+        </td>
+        <td className={`py-2 pr-2 text-right ${t.pnlPips >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {t.pnlPips >= 0 ? '+' : ''}{t.pnlPips.toFixed(1)}
+        </td>
+        <td className="py-2 pr-2 text-right">{t.size.toFixed(2)}</td>
+        <td className="py-2 pr-2 text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</td>
+        <td className="py-2 pr-2 text-yellow-400/80 truncate max-w-[120px]" title={t.signalReason}>{t.signalReason}</td>
+        <td className="py-2 text-muted-foreground">{new Date(t.closedAt).toLocaleDateString()}</td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={colSpan} className="p-0">
+            <TradeDetailPanel tradeId={t.id} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function TradeDetailPanel({ tradeId }: { tradeId: string }) {
+  const reasoning = trpc.engine.tradeReasoning.useQuery(
+    { positionId: tradeId },
+    { refetchInterval: false, staleTime: 60000 }
+  );
+  const postMortems = trpc.engine.postMortems.useQuery(undefined, {
+    refetchInterval: false,
+    staleTime: 60000,
+  });
+
+  const pm = useMemo(() => {
+    if (!postMortems.data) return null;
+    return postMortems.data.find((p: any) => p.tradeId === tradeId) || null;
+  }, [postMortems.data, tradeId]);
+
+  const r = reasoning.data;
+  const isLoading = reasoning.isLoading || postMortems.isLoading;
+
+  if (isLoading) {
+    return (
+      <div className="px-4 py-3 bg-card/30 border-b border-border">
+        <div className="text-[10px] text-muted-foreground font-mono animate-pulse">Loading trade details...</div>
+      </div>
+    );
+  }
+
+  if (!r && !pm) {
+    return (
+      <div className="px-4 py-3 bg-card/30 border-b border-border">
+        <div className="text-[10px] text-muted-foreground font-mono">No reasoning or post-mortem data available for this trade.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-3 bg-card/30 border-b border-cyan-500/10 space-y-3">
+      {/* ─── Entry Reasoning ─── */}
+      {r && (
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mb-1.5 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            Entry Reasoning
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="bg-background/50 rounded px-2 py-1">
+              <div className="text-[9px] text-muted-foreground uppercase">Confluence</div>
+              <div className={`text-sm font-bold font-mono ${r.confluenceScore >= 70 ? 'text-emerald-400' : r.confluenceScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                {r.confluenceScore}/100
+              </div>
+            </div>
+            <div className="bg-background/50 rounded px-2 py-1">
+              <div className="text-[9px] text-muted-foreground uppercase">Session</div>
+              <div className="text-sm font-bold font-mono text-foreground">{r.session || '—'}</div>
+            </div>
+            <div className="bg-background/50 rounded px-2 py-1">
+              <div className="text-[9px] text-muted-foreground uppercase">Timeframe</div>
+              <div className="text-sm font-bold font-mono text-foreground">{r.timeframe || '—'}</div>
+            </div>
+          </div>
+          {/* Factor breakdown */}
+          {r.factors && r.factors.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Factor Breakdown</div>
+              {r.factors.map((f: any, i: number) => (
+                <div key={i} className={`flex items-start gap-1.5 py-0.5 px-1.5 rounded text-[10px] ${f.present ? 'bg-emerald-500/5' : 'bg-zinc-800/30'}`}>
+                  <span className={`flex-shrink-0 mt-0.5 ${f.present ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                    {f.present ? '\u2713' : '\u2717'}
+                  </span>
+                  <span className={`font-bold flex-shrink-0 min-w-[100px] ${f.present ? 'text-cyan-400' : 'text-zinc-500'}`}>
+                    {f.concept}
+                  </span>
+                  <span className="text-muted-foreground flex-1 leading-relaxed">{f.detail}</span>
+                  {f.present && f.weight > 0 && (
+                    <span className="text-emerald-400 flex-shrink-0 font-mono">+{f.weight}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Summary */}
+          {r.summary && (
+            <div className="text-[10px] text-foreground/70 mt-2 border-t border-border/30 pt-1.5 leading-relaxed">
+              {r.summary}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Post-Mortem ─── */}
+      {pm && (
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${pm.outcome === 'win' ? 'bg-emerald-400' : pm.outcome === 'loss' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+            <span className={pm.outcome === 'win' ? 'text-emerald-400' : pm.outcome === 'loss' ? 'text-red-400' : 'text-yellow-400'}>
+              Post-Mortem — {pm.outcome?.toUpperCase()}
+            </span>
+            {pm.holdDuration && (
+              <span className="text-muted-foreground font-normal ml-2">Hold: {pm.holdDuration}</span>
+            )}
+          </div>
+          <div className={`rounded p-2 border text-[10px] space-y-1.5 ${
+            pm.outcome === 'win' ? 'bg-emerald-500/5 border-emerald-500/20' : pm.outcome === 'loss' ? 'bg-red-500/5 border-red-500/20' : 'bg-yellow-500/5 border-yellow-500/20'
+          }`}>
+            {pm.exitReason && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Exit:</span>
+                <span className="text-foreground font-bold">{pm.exitReason}</span>
+              </div>
+            )}
+            {pm.whatWorked && pm.whatWorked.length > 0 && (
+              <div>
+                <span className="text-emerald-400 font-bold">What Worked:</span>
+                <ul className="mt-0.5 space-y-0.5 ml-3">
+                  {pm.whatWorked.map((w: string, i: number) => (
+                    <li key={i} className="text-foreground/80 list-disc">{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {pm.whatFailed && pm.whatFailed.length > 0 && (
+              <div>
+                <span className="text-red-400 font-bold">What Failed:</span>
+                <ul className="mt-0.5 space-y-0.5 ml-3">
+                  {pm.whatFailed.map((w: string, i: number) => (
+                    <li key={i} className="text-foreground/80 list-disc">{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {pm.lessonLearned && (
+              <div className="border-t border-border/30 pt-1 mt-1">
+                <span className="text-yellow-400 font-bold">Lesson:</span>
+                <span className="text-foreground/80 ml-1">{pm.lessonLearned}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function BotView() {
@@ -87,6 +315,7 @@ export default function BotView() {
 
   // Position tabs
   const [posTab, setPosTab] = useState<'open' | 'pending' | 'closedToday' | 'history'>('open');
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
 
   // Execution mode & safety
   const killSwitchMut = trpc.paper.killSwitch.useMutation({ onSuccess: () => status.refetch() });
@@ -533,6 +762,7 @@ export default function BotView() {
                 <table className="w-full text-[10px] md:text-xs font-mono min-w-[600px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="w-5 py-2"></th>
                       <th className="text-left py-2 pr-2">Symbol</th>
                       <th className="text-left py-2 pr-2">Direction</th>
                       <th className="text-right py-2 pr-2">Entry</th>
@@ -545,22 +775,7 @@ export default function BotView() {
                   </thead>
                   <tbody>
                     {closedToday.map(t => (
-                      <tr key={t.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
-                        <td className="py-2 pr-2 font-bold text-foreground">{t.symbol.replace('/', '')}</td>
-                        <td className="py-2 pr-2">
-                          <span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
-                            {t.direction === 'long' ? 'Long ↑' : 'Short ↓'}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-2 text-right text-foreground">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
-                        <td className="py-2 pr-2 text-right text-foreground">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
-                        <td className={`py-2 pr-2 text-right font-bold ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {formatMoney(t.pnl, true)}
-                        </td>
-                        <td className="py-2 pr-2 text-right text-foreground">{t.size.toFixed(2)}</td>
-                        <td className="py-2 pr-2 text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</td>
-                        <td className="py-2 text-yellow-400/80 truncate max-w-[160px]">{t.signalReason}</td>
-                      </tr>
+                      <TradeRow key={t.id} trade={t} expanded={expandedTradeId === t.id} onToggle={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)} colSpan={9} />
                     ))}
                   </tbody>
                 </table>
@@ -578,6 +793,7 @@ export default function BotView() {
                 <table className="w-full text-[10px] md:text-xs font-mono min-w-[700px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="w-5 py-2"></th>
                       <th className="text-left py-2 pr-2">Symbol</th>
                       <th className="text-left py-2 pr-2">Dir</th>
                       <th className="text-right py-2 pr-2">Entry</th>
@@ -592,26 +808,7 @@ export default function BotView() {
                   </thead>
                   <tbody>
                     {[...filteredTradeHistory].reverse().map(t => (
-                      <tr key={t.id} className="border-b border-border/50 hover:bg-card/50 transition-colors">
-                        <td className="py-2 pr-2 font-bold text-foreground">{t.symbol.replace('/', '')}</td>
-                        <td className="py-2 pr-2">
-                          <span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>
-                            {t.direction === 'long' ? 'L' : 'S'}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-2 text-right">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
-                        <td className="py-2 pr-2 text-right">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</td>
-                        <td className={`py-2 pr-2 text-right font-bold ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {formatMoney(t.pnl, true)}
-                        </td>
-                        <td className={`py-2 pr-2 text-right ${t.pnlPips >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {t.pnlPips >= 0 ? '+' : ''}{t.pnlPips.toFixed(1)}
-                        </td>
-                        <td className="py-2 pr-2 text-right">{t.size.toFixed(2)}</td>
-                        <td className="py-2 pr-2 text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</td>
-                        <td className="py-2 pr-2 text-yellow-400/80 truncate max-w-[120px]" title={t.signalReason}>{t.signalReason}</td>
-                        <td className="py-2 text-muted-foreground">{new Date(t.closedAt).toLocaleDateString()}</td>
-                      </tr>
+                      <HistoryRow key={t.id} trade={t} expanded={expandedTradeId === t.id} onToggle={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)} colSpan={11} />
                     ))}
                   </tbody>
                 </table>

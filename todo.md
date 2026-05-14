@@ -965,3 +965,6 @@
 - [x] Read and debug the game plan dedup logic in bot-scanner — found 3 bugs
 - [x] Fix: added error handling, JS fallback query, debug logging (commit 2624daf)
 - [x] Push fix to GitHub (commit 2624daf)
+- [ ] Add clickable row expansion to Closed Today tab showing trade reasoning breakdown (factors, score, session)
+- [ ] Add post-mortem data (outcome, what worked/failed, lesson) to expanded row
+- [ ] Add same expandable detail to History tab for consistency
