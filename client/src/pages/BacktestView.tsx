@@ -222,6 +222,7 @@ export default function BacktestView() {
   const [slippagePips, setSlippagePips] = useState(0.5);
 
   // UI state
+  const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
   const [expandedConfig, setExpandedConfig] = useState<Set<string>>(new Set(["general"]));
   const [expandedResults, setExpandedResults] = useState<Set<string>>(
     new Set(["metrics", "equity", "monthly", "trades"])
@@ -370,9 +371,58 @@ export default function BacktestView() {
   }, [result, selectedTradeId]);
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* ═══════════════════ LEFT PANEL — CONFIG ═══════════════════ */}
-      <div className="w-80 flex-shrink-0 bg-card border-r border-border overflow-y-auto">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden">
+      {/* Mobile config toggle bar */}
+      <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-border bg-card/50 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <FlaskConical className="w-4 h-4 text-cyan" />
+          <span className="text-xs font-bold font-mono text-foreground uppercase">Backtest Lab</span>
+        </div>
+        <button
+          onClick={() => setMobileConfigOpen(!mobileConfigOpen)}
+          className="px-3 py-1.5 bg-cyan/20 text-cyan text-[10px] font-bold uppercase tracking-wider rounded transition hover:bg-cyan/30"
+        >
+          {mobileConfigOpen ? 'Hide Config' : 'Config'}
+        </button>
+      </div>
+
+      {/* Mobile config panel (slide down) */}
+      {mobileConfigOpen && (
+        <div className="md:hidden max-h-[60vh] overflow-y-auto bg-card border-b border-border flex-shrink-0">
+          <div className="p-3">
+            <button
+              onClick={handleRun}
+              disabled={runBacktest.isPending}
+              className="w-full flex items-center justify-center gap-2 bg-cyan text-background font-bold text-xs font-mono uppercase tracking-wider py-2.5 px-4 hover:opacity-90 transition-opacity disabled:opacity-50 mb-3"
+            >
+              {runBacktest.isPending ? 'Running...' : '▶ Run Backtest'}
+            </button>
+          </div>
+          <div className="divide-y divide-border/50 px-3 pb-3">
+            <div className="space-y-2 py-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase">Symbol</label>
+              <select value={symbol} onChange={e => setSymbol(e.target.value)} className="cfg-select">
+                {['EUR/USD','GBP/USD','USD/JPY','GBP/JPY','AUD/USD','USD/CAD','EUR/GBP','NZD/USD','XAU/USD','BTC/USD'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2 py-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase">Timeframe</label>
+              <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className="cfg-select">
+                {['15m','30m','1h','4h'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2 py-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase">Lookback</label>
+              <select value={lookbackMonths} onChange={e => setLookbackMonths(Number(e.target.value))} className="cfg-select">
+                {[1,2,3,6,12].map(m => <option key={m} value={m}>{m} month{m>1?'s':''}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════ LEFT PANEL — CONFIG (Desktop) ═══════════════════ */}
+      <div className="hidden md:block w-80 flex-shrink-0 bg-card border-r border-border overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-card border-b border-border p-3">
           <div className="flex items-center justify-between mb-3">
@@ -771,7 +821,7 @@ export default function BacktestView() {
       </div>
 
       {/* ═══════════════════ RIGHT PANEL — RESULTS ═══════════════════ */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-w-0">
         {/* Empty state */}
         {!result && !runBacktest.isPending && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">

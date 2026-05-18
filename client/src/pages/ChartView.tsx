@@ -152,9 +152,9 @@ export default function ChartView() {
   }, [analysis, marketBias]);
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex flex-col md:flex-row w-full h-full overflow-hidden">
       {/* TradingView Chart */}
-      <div className={`${panelOpen ? 'w-[65%]' : 'w-full'} h-full relative transition-all duration-200`}>
+      <div className={`${panelOpen ? 'md:w-[65%] h-[50%] md:h-full' : 'w-full h-full'} relative transition-all duration-200 min-w-0`}>
         {/* Timeframe bar */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-1 px-2 py-1 bg-card/80 backdrop-blur-sm border-b border-border">
           <span className="text-xs font-mono font-bold text-cyan mr-2">{selectedSymbol}</span>
@@ -185,7 +185,7 @@ export default function ChartView() {
 
       {/* Analysis Panels */}
       {panelOpen && (
-        <div className="w-[35%] h-full border-l border-border bg-card overflow-y-auto">
+        <div className="w-full md:w-[35%] h-[50%] md:h-full border-t md:border-t-0 md:border-l border-border bg-card overflow-y-auto">
           {/* Market Bias */}
           <AccordionPanel
             id="bias"

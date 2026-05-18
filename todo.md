@@ -968,3 +968,14 @@
 - [ ] Add clickable row expansion to Closed Today tab showing trade reasoning breakdown (factors, score, session)
 - [ ] Add post-mortem data (outcome, what worked/failed, lesson) to expanded row
 - [ ] Add same expandable detail to History tab for consistency
+
+## Mobile Horizontal Overflow Fixes
+- [x] BotView: Convert position/order/history tables to mobile card layout (stack vertically, hide low-priority columns)
+- [x] BotView: Fix live log horizontal bleed on mobile
+- [x] ICTAnalysis: Make symbol sidebar collapsible/hidden on mobile (w-40 fixed causes overflow)
+- [x] BacktestView: Make config sidebar collapsible/hidden on mobile (w-80 fixed causes overflow)
+- [x] SettingsView: Make tab sidebar responsive on mobile (w-48 fixed causes overflow)
+- [x] JournalView: Stack table/detail panels vertically on mobile instead of 65%/35% split
+- [x] ChartView: Stack chart and analysis panel vertically on mobile instead of side-by-side
+- [x] TradeJournal: Reduce min-widths on mobile to prevent overflow
+- [x] Global: Add overflow-x-hidden on body to prevent any horizontal scroll

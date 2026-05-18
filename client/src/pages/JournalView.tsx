@@ -191,9 +191,51 @@ export default function JournalView() {
             </span>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             {/* Trade Table */}
-            <div className={`${selectedTrade ? 'w-[65%]' : 'w-full'} bg-card border border-border overflow-x-auto transition-all`}>
+            <div className={`${selectedTrade ? 'md:w-[65%]' : 'w-full'} bg-card border border-border transition-all`}>
+              {/* Mobile: Card layout */}
+              <div className="md:hidden space-y-2 p-2">
+                {filteredTrades.map((t: any) => {
+                  const pnl = t.pnlAmount ? parseFloat(t.pnlAmount) : null;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`bg-card/50 border border-border/50 rounded p-2.5 space-y-1.5 cursor-pointer ${selectedTrade?.id === t.id ? 'border-cyan/50 bg-cyan/5' : ''}`}
+                      onClick={() => setSelectedTrade(selectedTrade?.id === t.id ? null : t)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-foreground font-mono">{t.symbol}</span>
+                          <span className={`text-[10px] font-bold px-1 py-0.5 ${t.direction === 'long' ? 'bg-bullish/20 text-bullish' : 'bg-bearish/20 text-bearish'}`}>
+                            {t.direction === 'long' ? 'BUY' : 'SELL'}
+                          </span>
+                          <span className={`text-[10px] font-bold ${t.status === 'open' ? 'text-cyan' : 'text-muted-foreground'}`}>{t.status?.toUpperCase()}</span>
+                        </div>
+                        <span className={`text-xs font-bold font-mono ${pnl !== null ? (pnl >= 0 ? 'text-bullish' : 'text-bearish') : 'text-muted-foreground'}`}>
+                          {pnl !== null ? `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}` : '—'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-mono">
+                        <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{t.entryPrice || '—'}</span></div>
+                        <div><span className="text-muted-foreground">Exit:</span> <span className="text-foreground">{t.exitPrice || '—'}</span></div>
+                        <div><span className="text-muted-foreground">R:R:</span> <span className="text-foreground">{t.riskReward || '—'}</span></div>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-muted-foreground">{t.entryTime ? new Date(t.entryTime).toLocaleDateString() : '—'}</span>
+                        <span className="text-muted-foreground">{t.setupType || ''} {t.timeframe || ''}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredTrades.length === 0 && (
+                  <div className="py-8 text-center text-muted-foreground text-xs">
+                    {trades.isLoading ? 'Loading trades...' : 'No trades found.'}
+                  </div>
+                )}
+              </div>
+              {/* Desktop: Table layout */}
+              <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs font-mono">
                 <thead>
                   <tr className="text-muted-foreground border-b border-border">
@@ -261,11 +303,12 @@ export default function JournalView() {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Trade Detail Panel */}
             {selectedTrade && (
-              <div className="w-[35%] bg-card border border-border p-4 space-y-4 overflow-y-auto">
+              <div className="w-full md:w-[35%] bg-card border border-border p-4 space-y-4 overflow-y-auto">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold font-mono text-foreground">Trade Details</h3>
                   <button onClick={() => setSelectedTrade(null)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>

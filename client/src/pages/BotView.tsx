@@ -643,8 +643,44 @@ export default function BotView() {
                   {activeBot === 'fotsi' ? 'No FOTSI positions. Bot #2 trades will appear here.' : 'No open positions. Click "+ Order" to place a trade.'}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-[10px] md:text-xs font-mono min-w-[700px]">
+                <>
+                {/* Mobile: Card layout */}
+                <div className="md:hidden space-y-2">
+                  {filteredPositions.map(pos => (
+                    <div key={pos.id} className="bg-card/50 border border-border/50 rounded p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-foreground font-mono">{pos.symbol.replace('/', '')}</span>
+                          <span className={`text-[10px] font-bold ${pos.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {pos.direction === 'long' ? 'LONG ↑' : 'SHORT ↓'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => closeMut.mutate({ positionId: pos.id })}
+                          disabled={closeMut.isPending}
+                          className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition text-[10px] font-bold"
+                        >
+                          CLOSE
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-mono">
+                        <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{pos.entryPrice.toFixed(pos.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Now:</span> <span className="text-foreground">{pos.currentPrice.toFixed(pos.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">P&L:</span> <span className={`font-bold ${pos.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(pos.pnl, true)}</span></div>
+                        <div><span className="text-muted-foreground">Size:</span> <span className="text-foreground">{pos.size.toFixed(2)}</span></div>
+                        <div><span className="text-muted-foreground">SL:</span> <span className="text-foreground">{pos.stopLoss?.toFixed(pos.symbol.includes('JPY') ? 3 : 5) ?? '—'}</span></div>
+                        <div><span className="text-muted-foreground">TP:</span> <span className="text-foreground">{pos.takeProfit?.toFixed(pos.symbol.includes('JPY') ? 3 : 5) ?? '—'}</span></div>
+                      </div>
+                      {pos.signalReason && (
+                        <div className="text-[10px] text-yellow-400/80 truncate">{pos.signalReason}{pos.signalScore > 0 && ` (${pos.signalScore}/10)`}</div>
+                      )}
+                      <div className="text-[9px] text-muted-foreground">{formatDuration(pos.openTime)}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop: Table layout */}
+                <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs font-mono min-w-[700px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -697,6 +733,7 @@ export default function BotView() {
                   </tbody>
                 </table>
                 </div>
+                </>
               )
             )}
 
@@ -706,8 +743,42 @@ export default function BotView() {
                   {activeBot === 'fotsi' ? 'No FOTSI pending orders.' : 'No pending orders.'}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-[10px] md:text-xs font-mono min-w-[600px]">
+                <>
+                {/* Mobile: Card layout */}
+                <div className="md:hidden space-y-2">
+                  {filteredPendingOrders.map(order => (
+                    <div key={order.id} className="bg-card/50 border border-border/50 rounded p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-foreground font-mono">{order.symbol.replace('/', '')}</span>
+                          <span className={`text-[10px] font-bold ${order.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {order.orderType.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => cancelPendingMut.mutate({ orderId: order.id })}
+                          disabled={cancelPendingMut.isPending}
+                          className="px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition text-[10px] font-bold"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-mono">
+                        <div><span className="text-muted-foreground">Trigger:</span> <span className="text-foreground">{order.triggerPrice.toFixed(order.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Size:</span> <span className="text-foreground">{order.size.toFixed(2)}</span></div>
+                        <div><span className="text-muted-foreground">Created:</span> <span className="text-foreground">{new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</span></div>
+                        <div><span className="text-muted-foreground">SL:</span> <span className="text-foreground">{order.stopLoss?.toFixed(order.symbol.includes('JPY') ? 3 : 5) ?? '—'}</span></div>
+                        <div><span className="text-muted-foreground">TP:</span> <span className="text-foreground">{order.takeProfit?.toFixed(order.symbol.includes('JPY') ? 3 : 5) ?? '—'}</span></div>
+                      </div>
+                      {order.signalReason && (
+                        <div className="text-[10px] text-yellow-400/80 truncate">{order.signalReason}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop: Table layout */}
+                <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs font-mono min-w-[600px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="text-left py-2 pr-2">Symbol</th>
@@ -751,6 +822,7 @@ export default function BotView() {
                   </tbody>
                 </table>
                 </div>
+                </>
               )
             )}
 
@@ -758,8 +830,36 @@ export default function BotView() {
               closedToday.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm font-mono">No trades closed today.</div>
               ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-[10px] md:text-xs font-mono min-w-[600px]">
+                <>
+                {/* Mobile: Card layout */}
+                <div className="md:hidden space-y-2">
+                  {closedToday.map(t => (
+                    <div key={t.id} className="bg-card/50 border border-border/50 rounded p-2.5 space-y-1.5" onClick={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-foreground font-mono">{t.symbol.replace('/', '')}</span>
+                          <span className={`text-[10px] font-bold ${t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {t.direction === 'long' ? 'LONG' : 'SHORT'}
+                          </span>
+                        </div>
+                        <span className={`text-xs font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(t.pnl, true)}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-mono">
+                        <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Exit:</span> <span className="text-foreground">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Size:</span> <span className="text-foreground">{t.size.toFixed(2)}</span></div>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</span>
+                        {t.signalReason && <span className="text-yellow-400/80 truncate max-w-[50%]">{t.signalReason}</span>}
+                      </div>
+                      {expandedTradeId === t.id && <TradeDetailPanel tradeId={t.id} />}
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop: Table layout */}
+                <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs font-mono min-w-[600px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="w-5 py-2"></th>
@@ -780,6 +880,7 @@ export default function BotView() {
                   </tbody>
                 </table>
                 </div>
+                </>
               )
             )}
 
@@ -789,8 +890,37 @@ export default function BotView() {
                   {activeBot === 'fotsi' ? 'No FOTSI trade history yet.' : 'No trade history yet.'}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-[10px] md:text-xs font-mono min-w-[700px]">
+                <>
+                {/* Mobile: Card layout */}
+                <div className="md:hidden space-y-2">
+                  {[...filteredTradeHistory].reverse().map(t => (
+                    <div key={t.id} className="bg-card/50 border border-border/50 rounded p-2.5 space-y-1.5" onClick={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-foreground font-mono">{t.symbol.replace('/', '')}</span>
+                          <span className={`text-[10px] font-bold ${t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {t.direction === 'long' ? 'L' : 'S'}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground">{new Date(t.closedAt).toLocaleDateString()}</span>
+                        </div>
+                        <span className={`text-xs font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(t.pnl, true)}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-mono">
+                        <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{t.entryPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Exit:</span> <span className="text-foreground">{t.exitPrice.toFixed(t.symbol.includes('JPY') ? 3 : 5)}</span></div>
+                        <div><span className="text-muted-foreground">Pips:</span> <span className={`${t.pnlPips >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{t.pnlPips >= 0 ? '+' : ''}{t.pnlPips.toFixed(1)}</span></div>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground capitalize">{t.closeReason.replace('_', ' ')}</span>
+                        {t.signalReason && <span className="text-yellow-400/80 truncate max-w-[50%]">{t.signalReason}</span>}
+                      </div>
+                      {expandedTradeId === t.id && <TradeDetailPanel tradeId={t.id} />}
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop: Table layout */}
+                <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs font-mono min-w-[700px]">
                   <thead>
                     <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
                       <th className="w-5 py-2"></th>
@@ -813,13 +943,14 @@ export default function BotView() {
                   </tbody>
                 </table>
                 </div>
+                </>
               )
             )}
           </div>
         </div>
 
         {/* RIGHT: Account Summary + Strategy Performance (~35%) */}
-        <div className="flex-[1] flex flex-col overflow-auto min-w-0 lg:min-w-[280px]">
+        <div className="flex-[1] flex flex-col overflow-auto min-w-0">
           {/* FOTSI Meter — shown when Bot #2 is active */}
           {activeBot === 'fotsi' && (
             <div className="p-3 border-b border-border">
@@ -1073,7 +1204,7 @@ export default function BotView() {
           <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-foreground">Live Log</h3>
           <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">{d.log.length} entries</span>
         </div>
-        <div className="overflow-auto font-mono text-[10px] md:text-xs leading-relaxed px-2 md:px-4 py-1 md:py-2 h-[calc(100%-28px)]">
+        <div className="overflow-y-auto overflow-x-hidden font-mono text-[10px] md:text-xs leading-relaxed px-2 md:px-4 py-1 md:py-2 h-[calc(100%-28px)]">
           {d.log.length === 0 ? (
             <div className="text-muted-foreground py-4 text-center">Paper trading engine ready. Press START to begin.</div>
           ) : (
@@ -1088,10 +1219,11 @@ export default function BotView() {
               };
               const { icon, color } = colorMap[entry.level] || colorMap.info!;
               return (
-                <div key={i} className="flex gap-2 py-0.5">
-                  <span className="text-muted-foreground flex-shrink-0">{formatTime(entry.time)}</span>
+                <div key={i} className="flex gap-2 py-0.5 min-w-0">
+                  <span className="text-muted-foreground flex-shrink-0 hidden md:inline">{formatTime(entry.time)}</span>
+                  <span className="text-muted-foreground flex-shrink-0 md:hidden">{formatTime(entry.time).slice(0, 5)}</span>
                   <span className={`flex-shrink-0 ${color}`}>{icon}</span>
-                  <span className={color}>{entry.message}</span>
+                  <span className={`${color} break-words min-w-0`}>{entry.message}</span>
                 </div>
               );
             })

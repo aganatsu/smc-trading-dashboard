@@ -708,7 +708,7 @@ function TradeRow({
         <div className={`w-1.5 h-10 ${trade.direction === "long" ? "bg-bullish" : "bg-bearish"}`} />
 
         {/* Symbol & Direction */}
-        <div className="min-w-[100px]">
+        <div className="min-w-[60px] md:min-w-[100px]">
           <div className="text-sm font-bold font-mono text-foreground">{trade.symbol}</div>
           <div className={`text-[10px] font-mono uppercase ${trade.direction === "long" ? "text-bullish" : "text-bearish"}`}>
             {trade.direction}
@@ -741,7 +741,7 @@ function TradeRow({
         </div>
 
         {/* P&L */}
-        <div className="ml-auto text-right min-w-[80px]">
+        <div className="ml-auto text-right min-w-[60px] md:min-w-[80px]">
           {pnl !== null ? (
             <>
               <div className={`text-sm font-bold font-mono ${isWin ? "text-bullish" : isLoss ? "text-bearish" : "text-foreground"}`}>
