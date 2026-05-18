@@ -369,10 +369,23 @@ export default function BacktestView() {
     return result.trades.find(t => t.id === selectedTradeId) || null;
   }, [result, selectedTradeId]);
 
+  const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
+
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden">
+      {/* Mobile config toggle */}
+      <div className="md:hidden flex-shrink-0 border-b border-border bg-card px-3 py-2">
+        <button
+          onClick={() => setMobileConfigOpen(o => open('supabase/functions/bot-scanner/impulseZoneExtendedCredits.test.ts', 'w', encoding='utf-8').write(content))}
+          className="flex items-center gap-2 text-xs font-mono font-bold text-cyan"
+        >
+          <FlaskConical className="w-4 h-4" />
+          {mobileConfigOpen ? 'Hide Config' : 'Show Config'}
+        </button>
+      </div>
+
       {/* ═══════════════════ LEFT PANEL — CONFIG ═══════════════════ */}
-      <div className="w-80 flex-shrink-0 bg-card border-r border-border overflow-y-auto">
+      <div className={`${mobileConfigOpen ? 'block' : 'hidden'} md:block w-full md:w-80 flex-shrink-0 bg-card border-r border-border overflow-y-auto max-h-[60vh] md:max-h-none`}>
         {/* Header */}
         <div className="sticky top-0 z-10 bg-card border-b border-border p-3">
           <div className="flex items-center justify-between mb-3">

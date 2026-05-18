@@ -191,9 +191,9 @@ export default function JournalView() {
             </span>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             {/* Trade Table */}
-            <div className={`${selectedTrade ? 'w-[65%]' : 'w-full'} bg-card border border-border overflow-x-auto transition-all`}>
+            <div className={`${selectedTrade ? 'w-full md:w-[65%]' : 'w-full'} bg-card border border-border overflow-x-auto transition-all`}>
               <table className="w-full text-xs font-mono">
                 <thead>
                   <tr className="text-muted-foreground border-b border-border">
@@ -265,7 +265,7 @@ export default function JournalView() {
 
             {/* Trade Detail Panel */}
             {selectedTrade && (
-              <div className="w-[35%] bg-card border border-border p-4 space-y-4 overflow-y-auto">
+              <div className="w-full md:w-[35%] bg-card border border-border p-4 space-y-4 overflow-y-auto">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold font-mono text-foreground">Trade Details</h3>
                   <button onClick={() => setSelectedTrade(null)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>

@@ -24,9 +24,9 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('broker');
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row h-full">
       {/* Settings Sidebar */}
-      <div className="w-48 flex-shrink-0 border-r border-border bg-card p-3">
+      <div className="hidden md:block w-48 flex-shrink-0 border-r border-border bg-card p-3">
         <div className="text-xs font-bold font-mono text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
           <Settings className="w-4 h-4" />
           Settings
@@ -52,8 +52,31 @@ export default function SettingsView() {
         </div>
       </div>
 
+      {/* Mobile: Horizontal tab bar */}
+      <div className="md:hidden flex-shrink-0 border-b border-border bg-card overflow-x-auto">
+        <div className="flex gap-1 px-2 py-2">
+          {TABS.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono font-bold rounded transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-cyan/20 text-cyan'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-3 h-3" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-2xl">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6 max-w-2xl">
         {activeTab === 'broker' && <BrokerSettings />}
         {activeTab === 'risk' && <RiskSettings />}
         {activeTab === 'preferences' && <PreferencesSettings />}
