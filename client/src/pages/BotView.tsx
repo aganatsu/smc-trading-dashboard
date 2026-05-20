@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
@@ -6,6 +6,7 @@ import BotConfigPanel from '@/components/BotConfigPanel';
 import FOTSIMeter from '@/components/FOTSIMeter';
 import FOTSIConfigPanel from '@/components/FOTSIConfigPanel';
 import WatchlistPanel from '@/components/WatchlistPanel';
+import SMCChart, { type SMCOverlays, type ChartTrade } from '@/components/SMCChart';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -269,6 +270,59 @@ function TradeDetailPanel({ tradeId }: { tradeId: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Bot Trade Chart ────────────────────────────────────────────────
+
+function BotTradeChart({ symbol, positions }: { symbol: string; positions: any[] }) {
+  const [expanded, setExpanded] = useState(true);
+  const candles = trpc.market.candles.useQuery(
+    { symbol, interval: '1h' as const, outputsize: 100 },
+    { refetchInterval: 60000, staleTime: 30000 }
+  );
+
+  const overlays = useMemo<SMCOverlays | undefined>(() => {
+    const symbolPositions = positions.filter(p => p.symbol === symbol);
+    if (symbolPositions.length === 0) return undefined;
+    return {
+      trades: symbolPositions.map(p => ({
+        entryPrice: p.entryPrice,
+        stopLoss: p.stopLoss,
+        takeProfit: p.takeProfit,
+        direction: p.direction as 'long' | 'short',
+        label: `${p.size} lots`,
+      })),
+    };
+  }, [positions, symbol]);
+
+  if (!expanded) {
+    return (
+      <div className="px-2 md:px-4 py-2 border-b border-border">
+        <button onClick={() => setExpanded(true)} className="text-[10px] font-mono text-muted-foreground hover:text-cyan-400 transition">
+          ▶ Show Chart ({symbol})
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-border flex flex-col" style={{ height: '240px' }}>
+      <div className="flex items-center justify-between px-2 py-1 bg-card/30 border-b border-border/30 flex-shrink-0">
+        <span className="text-[10px] font-mono font-bold text-cyan-400">{symbol} — 1H</span>
+        <button onClick={() => setExpanded(false)} className="text-[10px] text-muted-foreground hover:text-foreground transition">▼ Hide</button>
+      </div>
+      <div className="flex-1 min-h-0">
+        <SMCChart
+          candles={(candles.data as any[]) ?? []}
+          symbol={symbol}
+          overlays={overlays}
+          loading={candles.isLoading}
+          hideToolbar
+          compact
+        />
+      </div>
     </div>
   );
 }
@@ -949,8 +1003,10 @@ export default function BotView() {
           </div>
         </div>
 
-        {/* RIGHT: Account Summary + Strategy Performance (~35%) */}
+        {/* RIGHT: Chart + Account Summary + Strategy Performance (~35%) */}
         <div className="flex-[1] flex flex-col overflow-auto min-w-0">
+          {/* Trade Chart — shows selected symbol with position overlays */}
+          <BotTradeChart symbol={symbol} positions={filteredPositions} />
           {/* FOTSI Meter — shown when Bot #2 is active */}
           {activeBot === 'fotsi' && (
             <div className="p-3 border-b border-border">

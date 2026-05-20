@@ -979,3 +979,15 @@
 - [x] ChartView: Stack chart and analysis panel vertically on mobile instead of side-by-side
 - [x] TradeJournal: Reduce min-widths on mobile to prevent overflow
 - [x] Global: Add overflow-x-hidden on body to prevent any horizontal scroll
+
+## Consolidated SMCChart Component
+- [x] Build unified SMCChart.tsx using Lightweight Charts v5 with full SMC overlay support
+- [x] Support overlay layers: Order Blocks (rectangles), FVGs (semi-transparent zones), Breaker Blocks (dashed rectangles)
+- [x] Support overlay layers: Swing Points (markers), Liquidity Pools (horizontal bands), Fib Levels (horizontal lines)
+- [x] Support overlay layers: HTF POIs (D/4H/1H highlighted zones), Daily Entities (D1 OBs/FVGs/Breakers)
+- [x] Support trade overlays: Entry/SL/TP lines, trade markers for entries/exits
+- [x] Add layer toggle toolbar (compact, toggles each overlay category on/off)
+- [x] Replace TradingViewChart in ChartView with SMCChart (pass analysis data as overlays)
+- [x] Wire SMCChart into BotView for trade visualization (positions + trade history overlays)
+- [x] Remove deprecated TradingViewChart.tsx, CandlestickChart.tsx, TradeChart.tsx (kept as dead code for now, no longer imported)
+- [x] Write vitest tests for SMCChart overlay data transformation (12 tests in smcChart.test.ts)

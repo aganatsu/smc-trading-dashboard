@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { trpc } from '@/lib/trpc';
-import TradingViewChart from '@/components/TradingViewChart';
+import SMCChart, { type SMCOverlays } from '@/components/SMCChart';
 import { INSTRUMENTS, TIMEFRAMES, type Instrument, type Timeframe } from '@/lib/marketData';
 import { runFullAnalysis, type AnalysisResult, type Candle } from '@/lib/smcAnalysis';
 import {
@@ -53,6 +53,29 @@ export default function ChartView() {
       return null;
     }
   }, [candles.data]);
+
+  // Transform analysis into chart overlays
+  const chartOverlays = useMemo<SMCOverlays | undefined>(() => {
+    if (!analysis) return undefined;
+    return {
+      orderBlocks: analysis.orderBlocks.filter(ob => !ob.mitigated).map(ob => ({
+        high: ob.high, low: ob.low, datetime: ob.datetime, direction: ob.type,
+      })),
+      fvgs: analysis.fvgs.filter(f => !f.mitigated).map(f => ({
+        high: f.high, low: f.low, datetime: f.datetime, direction: f.type,
+      })),
+      swingPoints: analysis.structure.swingPoints.map(sp => ({
+        price: sp.price, index: sp.index, type: sp.type, datetime: sp.datetime,
+      })),
+      liquidityPools: analysis.liquidityPools.map(lp => ({
+        price: lp.price, type: lp.type, strength: lp.strength, swept: lp.swept,
+      })),
+      fibLevels: analysis.fibLevels,
+      fiftyPercentLevel: analysis.fiftyPercentLevel,
+      keySupport: analysis.keySupport,
+      keyResistance: analysis.keyResistance,
+    };
+  }, [analysis]);
 
   // ICT data queries
   const pdLevels = trpc.ict.pdLevels.useQuery(
@@ -153,7 +176,7 @@ export default function ChartView() {
 
   return (
     <div className="flex flex-col md:flex-row w-full h-full overflow-hidden">
-      {/* TradingView Chart */}
+      {/* SMC Chart */}
       <div className={`${panelOpen ? 'md:w-[65%] h-[50%] md:h-full' : 'w-full h-full'} relative transition-all duration-200 min-w-0`}>
         {/* Timeframe bar */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-1 px-2 py-1 bg-card/80 backdrop-blur-sm border-b border-border">
@@ -180,7 +203,12 @@ export default function ChartView() {
             {panelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
           </button>
         </div>
-        <TradingViewChart instrument={instrument} timeframe={selectedTimeframe} loading={candles.isLoading} />
+        <SMCChart
+          candles={(candles.data as any[]) ?? []}
+          symbol={selectedSymbol}
+          overlays={chartOverlays}
+          loading={candles.isLoading}
+        />
       </div>
 
       {/* Analysis Panels */}
