@@ -311,10 +311,10 @@ export const DEFAULT_CONFIG: BotConfig = {
     newsFilterPauseMinutes: 30,
   },
   notifications: {
-    notifyOnTrade: true,
+    notifyOnTrade: false,
     notifyOnSignal: false,
-    notifyOnError: true,
-    notifyDailySummary: true,
+    notifyOnError: false,
+    notifyDailySummary: false,
     notifyChannel: 'in_app',
   },
   protection: {
