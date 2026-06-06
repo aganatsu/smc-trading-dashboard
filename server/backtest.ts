@@ -641,6 +641,7 @@ export async function runBacktest(btConfig: BacktestConfig): Promise<BacktestRes
       if (analysis.session.isKillZone) factors.push("Kill Zone");
       if (analysis.judasSwing.detected) factors.push("Judas Swing");
       if (analysis.liquidityPools.some(lp => lp.swept)) factors.push("Liquidity Sweep");
+      if (analysis.entryConfirmation.found) factors.push(`Entry: ${analysis.entryConfirmation.summary}`);
 
       openTrade = {
         id: tradeId,

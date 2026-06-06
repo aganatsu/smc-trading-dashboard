@@ -991,3 +991,9 @@
 - [x] Wire SMCChart into BotView for trade visualization (positions + trade history overlays)
 - [x] Remove deprecated TradingViewChart.tsx, CandlestickChart.tsx, TradeChart.tsx (kept as dead code for now, no longer imported)
 - [x] Write vitest tests for SMCChart overlay data transformation (12 tests in smcChart.test.ts)
+## Entry Confirmation Detail in Trade Breakdown
+- [x] Add "Entry Confirmation" factor to buildTradeReasoning() showing candle pattern (engulfing, pin bar, CHoCH, inside bar)
+- [x] Enhance detectReversalCandle() with more patterns: inside bar breakout, doji + follow-through, morning/evening star
+- [x] Add entry confirmation to ChartView checklist items
+- [x] Visually highlight the entry confirmation factor in TradeDetailPanel with distinct styling
+- [x] Write tests for enhanced candle pattern detection (20 tests in entryConfirmation.test.ts)

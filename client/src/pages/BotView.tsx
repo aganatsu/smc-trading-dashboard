@@ -195,20 +195,27 @@ function TradeDetailPanel({ tradeId }: { tradeId: string }) {
           {r.factors && r.factors.length > 0 && (
             <div className="space-y-0.5">
               <div className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Factor Breakdown</div>
-              {r.factors.map((f: any, i: number) => (
-                <div key={i} className={`flex items-start gap-1.5 py-0.5 px-1.5 rounded text-[10px] ${f.present ? 'bg-emerald-500/5' : 'bg-zinc-800/30'}`}>
-                  <span className={`flex-shrink-0 mt-0.5 ${f.present ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                    {f.present ? '\u2713' : '\u2717'}
-                  </span>
-                  <span className={`font-bold flex-shrink-0 min-w-[100px] ${f.present ? 'text-cyan-400' : 'text-zinc-500'}`}>
-                    {f.concept}
-                  </span>
-                  <span className="text-muted-foreground flex-1 leading-relaxed">{f.detail}</span>
-                  {f.present && f.weight > 0 && (
-                    <span className="text-emerald-400 flex-shrink-0 font-mono">+{f.weight}</span>
-                  )}
-                </div>
-              ))}
+              {r.factors.map((f: any, i: number) => {
+                const isEntryConfirm = f.concept === 'Entry Confirmation';
+                return (
+                  <div key={i} className={`flex items-start gap-1.5 py-0.5 px-1.5 rounded text-[10px] ${
+                    isEntryConfirm && f.present
+                      ? 'bg-amber-500/10 border border-amber-500/30'
+                      : f.present ? 'bg-emerald-500/5' : 'bg-zinc-800/30'
+                  }`}>
+                    <span className={`flex-shrink-0 mt-0.5 ${f.present ? (isEntryConfirm ? 'text-amber-400' : 'text-emerald-400') : 'text-zinc-600'}`}>
+                      {f.present ? (isEntryConfirm ? '\u26A1' : '\u2713') : '\u2717'}
+                    </span>
+                    <span className={`font-bold flex-shrink-0 min-w-[100px] ${f.present ? (isEntryConfirm ? 'text-amber-400' : 'text-cyan-400') : 'text-zinc-500'}`}>
+                      {f.concept}
+                    </span>
+                    <span className={`flex-1 leading-relaxed ${isEntryConfirm && f.present ? 'text-amber-200/90 font-medium' : 'text-muted-foreground'}`}>{f.detail}</span>
+                    {f.present && f.weight > 0 && (
+                      <span className={`flex-shrink-0 font-mono ${isEntryConfirm ? 'text-amber-400' : 'text-emerald-400'}`}>+{f.weight}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           {/* Summary */}

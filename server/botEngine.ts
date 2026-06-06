@@ -275,6 +275,22 @@ function buildTradeReasoning(
       : 'No recent liquidity sweep detected',
   });
 
+  // Entry Confirmation (candle patterns + CHoCH on entry TF)
+  const ec = analysis.entryConfirmation;
+  const ecAligned = ec.found && ec.patterns.some(p =>
+    (signal === 'buy' && p.direction === 'bullish') || (signal === 'sell' && p.direction === 'bearish')
+  );
+  factors.push({
+    concept: 'Entry Confirmation',
+    present: ecAligned,
+    weight: ecAligned ? 1 : 0,
+    detail: ecAligned
+      ? ec.summary
+      : ec.found
+        ? `Pattern detected (${ec.summary}) but direction misaligned with ${signal} signal`
+        : 'No candle entry confirmation pattern (engulfing, pin bar, CHoCH, inside bar)',
+  });
+
   const presentFactors = factors.filter(f => f.present);
   const summary = `${signal.toUpperCase()} ${symbol}: ${presentFactors.length}/${factors.length} factors aligned (score: ${analysis.confluenceScore}/10). ${presentFactors.map(f => f.concept).join(', ')}`;
 

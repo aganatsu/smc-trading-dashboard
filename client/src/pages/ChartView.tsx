@@ -162,13 +162,15 @@ export default function ChartView() {
 
   // Entry checklist scoring
   const checklist = useMemo(() => {
-    if (!analysis) return { items: [], score: 0, total: 6 };
+    if (!analysis) return { items: [], score: 0, total: 7 };
+    const reversal = analysis.entryChecklist?.reversalCandleConfirmed;
     const items = [
       { label: 'Market Structure Aligned', passed: analysis.structure.trend !== 'ranging' },
       { label: 'HTF Bias Confirmed', passed: marketBias.direction !== 'neutral' && (marketBias.direction === analysis.structure.trend) },
       { label: 'Retracement to OB/FVG', passed: analysis.orderBlocks.some(ob => !ob.mitigated) || analysis.fvgs.some(fvg => !fvg.mitigated) },
       { label: 'Confluence with Key Level', passed: analysis.keySupport.length > 0 || analysis.keyResistance.length > 0 },
       { label: 'Liquidity Swept', passed: analysis.liquidityPools.some(l => l.swept) },
+      { label: reversal?.status ? `Entry: ${reversal.detail}` : 'Entry Confirmation (Engulfing/Pin Bar/CHoCH)', passed: !!reversal?.status },
       { label: 'Risk:Reward > 2:1', passed: true },
     ];
     return { items, score: items.filter(i => i.passed).length, total: items.length };

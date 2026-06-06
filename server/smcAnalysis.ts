@@ -111,6 +111,14 @@ export interface CorrelationPair {
   coefficient: number; // -1 to +1
 }
 
+export interface EntryConfirmation {
+  found: boolean;
+  patterns: { type: string; direction: 'bullish' | 'bearish' | 'neutral'; strength: 'strong' | 'moderate' | 'weak' }[];
+  chochOnEntry: boolean;
+  chochType: 'bullish' | 'bearish' | null;
+  summary: string;
+}
+
 export interface FullAnalysis {
   structure: MarketStructure;
   orderBlocks: OrderBlock[];
@@ -120,6 +128,7 @@ export interface FullAnalysis {
   judasSwing: JudasSwing;
   session: SessionInfo;
   premiumDiscount: PremiumDiscount;
+  entryConfirmation: EntryConfirmation;
   confluenceScore: number;
   bias: 'bullish' | 'bearish' | 'neutral';
   reasoning: string[];
@@ -506,6 +515,112 @@ export function detectReversalCandle(candles: Candle[]): { found: boolean; type:
   return { found: false, type: '' };
 }
 
+/**
+ * Detect all candle-based entry confirmation patterns on the last few candles.
+ * Returns multiple patterns if found (e.g., engulfing + at OB zone).
+ */
+export function detectEntryConfirmation(candles: Candle[], structure: MarketStructure): EntryConfirmation {
+  const patterns: EntryConfirmation['patterns'] = [];
+  if (candles.length < 4) return { found: false, patterns: [], chochOnEntry: false, chochType: null, summary: 'Insufficient data' };
+
+  const last = candles[candles.length - 1];
+  const prev = candles[candles.length - 2];
+  const prev2 = candles[candles.length - 3];
+  const lastBody = Math.abs(last.close - last.open);
+  const lastRange = last.high - last.low;
+  const prevBody = Math.abs(prev.close - prev.open);
+  const prevRange = prev.high - prev.low;
+
+  // 1. Engulfing Candle (strong)
+  if (last.close > last.open && prev.close < prev.open && last.open <= prev.close && last.close >= prev.open) {
+    patterns.push({ type: 'Bullish Engulfing', direction: 'bullish', strength: 'strong' });
+  }
+  if (last.close < last.open && prev.close > prev.open && last.open >= prev.close && last.close <= prev.open) {
+    patterns.push({ type: 'Bearish Engulfing', direction: 'bearish', strength: 'strong' });
+  }
+
+  // 2. Pin Bar / Hammer / Shooting Star (strong)
+  if (lastRange > 0) {
+    const lowerWick = Math.min(last.open, last.close) - last.low;
+    const upperWick = last.high - Math.max(last.open, last.close);
+    if (lowerWick > lastBody * 2 && upperWick < lastBody * 0.5) {
+      patterns.push({ type: 'Bullish Pin Bar (Hammer)', direction: 'bullish', strength: 'strong' });
+    }
+    if (upperWick > lastBody * 2 && lowerWick < lastBody * 0.5) {
+      patterns.push({ type: 'Bearish Pin Bar (Shooting Star)', direction: 'bearish', strength: 'strong' });
+    }
+  }
+
+  // 3. Inside Bar Breakout (moderate)
+  const prevHigh = prev.high;
+  const prevLow = prev.low;
+  const prev2High = prev2.high;
+  const prev2Low = prev2.low;
+  // prev is inside prev2
+  if (prev.high <= prev2.high && prev.low >= prev2.low) {
+    // last breaks out of the inside bar
+    if (last.close > prevHigh) {
+      patterns.push({ type: 'Inside Bar Breakout (Bullish)', direction: 'bullish', strength: 'moderate' });
+    } else if (last.close < prevLow) {
+      patterns.push({ type: 'Inside Bar Breakout (Bearish)', direction: 'bearish', strength: 'moderate' });
+    }
+  }
+
+  // 4. Doji + Follow-Through (moderate)
+  if (prevRange > 0 && prevBody / prevRange < 0.1) {
+    // prev was a doji, check if last is follow-through
+    if (last.close > last.open && lastBody > prevRange * 0.5) {
+      patterns.push({ type: 'Doji + Bullish Follow-Through', direction: 'bullish', strength: 'moderate' });
+    } else if (last.close < last.open && lastBody > prevRange * 0.5) {
+      patterns.push({ type: 'Doji + Bearish Follow-Through', direction: 'bearish', strength: 'moderate' });
+    }
+  }
+
+  // 5. Morning Star / Evening Star (strong — 3-candle pattern)
+  if (candles.length >= 4) {
+    const c1 = prev2;
+    const c2 = prev;
+    const c3 = last;
+    const c1Body = Math.abs(c1.close - c1.open);
+    const c2Body = Math.abs(c2.close - c2.open);
+    const c3Body = Math.abs(c3.close - c3.open);
+    const c1Range = c1.high - c1.low;
+    // Morning Star: large bearish → small body → large bullish
+    if (c1.close < c1.open && c1Body > c1Range * 0.4 && c2Body < c1Body * 0.3 && c3.close > c3.open && c3Body > c1Body * 0.5) {
+      if (c3.close > (c1.open + c1.close) / 2) {
+        patterns.push({ type: 'Morning Star', direction: 'bullish', strength: 'strong' });
+      }
+    }
+    // Evening Star: large bullish → small body → large bearish
+    if (c1.close > c1.open && c1Body > c1Range * 0.4 && c2Body < c1Body * 0.3 && c3.close < c3.open && c3Body > c1Body * 0.5) {
+      if (c3.close < (c1.open + c1.close) / 2) {
+        patterns.push({ type: 'Evening Star', direction: 'bearish', strength: 'strong' });
+      }
+    }
+  }
+
+  // 6. CHoCH on entry timeframe (strong — most recent CHoCH within last 5 candles)
+  let chochOnEntry = false;
+  let chochType: 'bullish' | 'bearish' | null = null;
+  if (structure.choch.length > 0) {
+    const lastChoch = structure.choch[structure.choch.length - 1];
+    const candleCount = candles.length;
+    // CHoCH is "recent" if it occurred within the last 5 candles
+    if (lastChoch.index >= candleCount - 5) {
+      chochOnEntry = true;
+      chochType = lastChoch.type;
+      patterns.push({ type: `CHoCH (${lastChoch.type})`, direction: lastChoch.type, strength: 'strong' });
+    }
+  }
+
+  const found = patterns.length > 0;
+  const summary = found
+    ? patterns.map(p => p.type).join(' + ')
+    : 'No entry confirmation pattern detected';
+
+  return { found, patterns, chochOnEntry, chochType, summary };
+}
+
 // ─── Full Analysis Pipeline ─────────────────────────────────────────
 
 export function runFullServerAnalysis(
@@ -522,6 +637,7 @@ export function runFullServerAnalysis(
   const session = detectSession(candles);
   const premiumDiscount = calculatePremiumDiscount(candles, structure.swingPoints);
   const reversal = detectReversalCandle(candles);
+  const entryConfirmation = detectEntryConfirmation(candles, structure);
 
   // Build reasoning and score
   const reasoning: string[] = [];
@@ -641,6 +757,7 @@ export function runFullServerAnalysis(
   return {
     structure, orderBlocks, fvgs, liquidityPools,
     pdLevels, judasSwing, session, premiumDiscount,
+    entryConfirmation,
     confluenceScore: normalizedScore,
     bias,
     reasoning,
