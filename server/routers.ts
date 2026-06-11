@@ -819,6 +819,7 @@ export const appRouter = router({
         tradePlaced: r.tradePlaced,
         rejectionReason: r.rejectionReason,
         reasoning: r.reasoning,
+        directionVerdict: r.directionVerdict || null,
       }));
     }),
 

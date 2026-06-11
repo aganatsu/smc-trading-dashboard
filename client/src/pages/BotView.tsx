@@ -1237,6 +1237,31 @@ export default function BotView() {
                         </span>
                       </div>
                     </div>
+                    {/* Direction Verdict */}
+                    {sr.directionVerdict && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
+                          sr.directionVerdict.verdict === 'long' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                          sr.directionVerdict.verdict === 'short' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
+                          'bg-zinc-600/20 text-zinc-400 border border-zinc-500/30'
+                        }`}>
+                          {sr.directionVerdict.verdict === 'long' ? '↑ LONG' : sr.directionVerdict.verdict === 'short' ? '↓ SHORT' : '— NEUTRAL'}
+                        </span>
+                        <span className={`text-[9px] font-mono ${
+                          sr.directionVerdict.confidence >= 70 ? 'text-emerald-400' :
+                          sr.directionVerdict.confidence >= 50 ? 'text-yellow-400' :
+                          sr.directionVerdict.confidence >= 30 ? 'text-orange-400' : 'text-red-400'
+                        }`}>
+                          {sr.directionVerdict.confidence}%
+                        </span>
+                        {sr.directionVerdict.shouldBlock && (
+                          <span className="text-[8px] font-bold text-red-500 bg-red-500/10 px-1 rounded">BLOCKED</span>
+                        )}
+                        <span className="text-[8px] text-muted-foreground ml-auto">
+                          {sr.directionVerdict.agreement} sources agree
+                        </span>
+                      </div>
+                    )}
                     {sr.reasoning?.summary && (
                       <div className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{sr.reasoning.summary}</div>
                     )}

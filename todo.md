@@ -997,3 +997,9 @@
 - [x] Add entry confirmation to ChartView checklist items
 - [x] Visually highlight the entry confirmation factor in TradeDetailPanel with distinct styling
 - [x] Write tests for enhanced candle pattern detection (20 tests in entryConfirmation.test.ts)
+## Direction Verdict — Single Source of Truth for Direction
+- [x] Add directionVerdict field to ScanResult interface in botEngine.ts
+- [x] Build computeDirectionVerdict() helper that derives verdict from structure + bias + signal
+- [x] Wire verdict computation into scanInstrument() return path
+- [x] Extend scanResults router procedure to include directionVerdict in API response
+- [x] Add Direction Verdict display to scan result cards in BotView (verdict badge, confidence %, agreement count, block indicator)

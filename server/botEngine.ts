@@ -76,6 +76,14 @@ export interface ScanResult {
   reasoning: TradeReasoning;
   tradePlaced: boolean;
   rejectionReason?: string;
+  directionVerdict?: {
+    verdict: 'long' | 'short' | 'neutral';
+    confidence: number;
+    agreement: number;
+    shouldBlock: boolean;
+    scoreAdjustment: number;
+    summary: string;
+  };
 }
 
 export interface StagedSetup {
@@ -440,6 +448,58 @@ function isSessionAllowed(config: BotConfig): { allowed: boolean; reason: string
   return { allowed: true, reason: 'Session active' };
 }
 
+/**
+ * Compute a simplified direction verdict from the dashboard's local analysis.
+ * This mirrors the logic from the production directionVerdict.ts but uses only
+ * the data available in the dashboard's FullAnalysis (structure trend + bias).
+ */
+function computeDirectionVerdict(
+  analysis: FullAnalysis,
+  signal: 'buy' | 'sell' | 'no_signal',
+): ScanResult['directionVerdict'] {
+  const trend = analysis.structure?.trend; // 'bullish' | 'bearish' | 'ranging'
+  const bias = analysis.bias; // 'bullish' | 'bearish' | 'neutral'
+
+  // Determine verdict from structure + bias agreement
+  let verdict: 'long' | 'short' | 'neutral' = 'neutral';
+  let confidence = 30; // base
+  let agreement = 0;
+  const sources: string[] = [];
+
+  // Structure trend (strongest signal)
+  if (trend === 'bullish') { verdict = 'long'; confidence += 25; agreement++; sources.push('structure:long'); }
+  else if (trend === 'bearish') { verdict = 'short'; confidence += 25; agreement++; sources.push('structure:short'); }
+
+  // Bias alignment
+  if (bias === 'bullish') {
+    if (verdict === 'long') { confidence += 20; agreement++; sources.push('bias:long'); }
+    else if (verdict === 'neutral') { verdict = 'long'; confidence += 15; agreement++; sources.push('bias:long'); }
+    else { confidence -= 15; sources.push('bias:long (conflicts)'); }
+  } else if (bias === 'bearish') {
+    if (verdict === 'short') { confidence += 20; agreement++; sources.push('bias:short'); }
+    else if (verdict === 'neutral') { verdict = 'short'; confidence += 15; agreement++; sources.push('bias:short'); }
+    else { confidence -= 15; sources.push('bias:short (conflicts)'); }
+  }
+
+  // Signal alignment bonus
+  if (signal === 'buy' && verdict === 'long') { confidence += 10; agreement++; sources.push('signal:long'); }
+  else if (signal === 'sell' && verdict === 'short') { confidence += 10; agreement++; sources.push('signal:short'); }
+  else if (signal !== 'no_signal') { confidence -= 10; sources.push(`signal:${signal === 'buy' ? 'long' : 'short'} (conflicts)`); }
+
+  confidence = Math.max(0, Math.min(100, confidence));
+  const shouldBlock = confidence < 25 || (verdict === 'neutral' && signal !== 'no_signal');
+  const scoreAdjustment = confidence >= 70 ? 0.5 : confidence >= 50 ? 0 : confidence >= 30 ? -0.5 : -1.0;
+
+  return {
+    verdict,
+    confidence,
+    agreement,
+    shouldBlock,
+    scoreAdjustment,
+    summary: `${verdict.toUpperCase()} @ ${confidence}% (${sources.join(', ')})`,
+  };
+}
+
 async function scanInstrument(symbol: string, config: BotConfig): Promise<ScanResult> {
   const noSignal = (reason: string): ScanResult => ({
     symbol,
@@ -536,9 +596,13 @@ async function scanInstrument(symbol: string, config: BotConfig): Promise<ScanRe
       }
     }
 
+    // Compute direction verdict from available analysis data
+    const verdict = computeDirectionVerdict(analysis, signal);
+
     return {
       symbol, analysis, signal, confluenceScore: analysis.confluenceScore, reasoning,
       tradePlaced: false, // Will be set to true if trade is placed
+      directionVerdict: verdict,
     };
   } catch (err: any) {
     return noSignal(`Analysis error: ${err.message}`);
