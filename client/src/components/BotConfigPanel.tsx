@@ -180,7 +180,9 @@ function StrategySection({ config, onChange }: { config: any; onChange: (key: st
       <SectionHeader title="Liquidity" collapsed={!!collapsed.liquidity} onToggle={() => toggle('liquidity')} />
       {!collapsed.liquidity && (
         <div className="pl-2 border-l border-zinc-700/50">
-          <Toggle label="Sweep Required Before Entry" value={config.liquiditySweepRequired} onChange={v => onChange('liquiditySweepRequired', v)} />
+          <Toggle label="Sweep Required Before Entry" description="Require any liquidity sweep before entry (legacy)" value={config.liquiditySweepRequired} onChange={v => onChange('liquiditySweepRequired', v)} />
+          <Toggle label="Require Entry-Trigger Sweep" description="Block entry until BSL/SSL pool near zone is swept+rejected (Liquidity Sweep Gate)" value={config.requireLiquiditySweep} onChange={v => onChange('requireLiquiditySweep', v)} />
+          <NumberInput label="Absorbed Penalty" description="Score penalty when entry-trigger pool is swept but broken through (0=disabled)" value={config.sweptAbsorbedPenalty} onChange={v => onChange('sweptAbsorbedPenalty', v)} min={0} max={5} step={0.5} />
           <NumberInput label="Equal Highs/Lows Sensitivity" description="1=strict, 5=loose" value={config.equalHighsLowsSensitivity} onChange={v => onChange('equalHighsLowsSensitivity', v)} min={1} max={5} />
           <NumberInput label="Pool Min Touches" value={config.liquidityPoolMinTouches} onChange={v => onChange('liquidityPoolMinTouches', v)} min={2} max={5} />
         </div>

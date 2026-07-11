@@ -52,6 +52,8 @@ export interface StrategySettings {
 
   // Liquidity
   liquiditySweepRequired: boolean;
+  requireLiquiditySweep: boolean;    // Liquidity Sweep Gate: block entry until entry-trigger BSL/SSL pool is swept+rejected
+  sweptAbsorbedPenalty: number;      // Penalty for swept_absorbed entry-trigger pools (0-5, default 2.0)
   equalHighsLowsSensitivity: number; // 1-5 (1=strict, 5=loose)
   liquidityPoolMinTouches: number;   // 2, 3, or 4
 
@@ -209,6 +211,8 @@ export const DEFAULT_CONFIG: BotConfig = {
     chochAsReversal: true,
     structureLookback: 50,
     liquiditySweepRequired: false,
+    requireLiquiditySweep: false,
+    sweptAbsorbedPenalty: 2.0,
     equalHighsLowsSensitivity: 3,
     liquidityPoolMinTouches: 2,
     premiumDiscountEnabled: true,
