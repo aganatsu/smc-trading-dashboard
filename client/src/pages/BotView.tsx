@@ -284,7 +284,7 @@ function TradeDetailPanel({ tradeId }: { tradeId: string }) {
 // ─── Bot Trade Chart ────────────────────────────────────────────────
 
 function BotTradeChart({ symbol, positions }: { symbol: string; positions: any[] }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => window.innerWidth >= 768);
   const candles = trpc.market.candles.useQuery(
     { symbol, interval: '1h' as const, outputsize: 100 },
     { refetchInterval: 60000, staleTime: 30000 }
@@ -1211,8 +1211,18 @@ export default function BotView() {
               </div>
             )}
 
-            {/* Setup Staging Watchlist */}
-            <WatchlistPanel />
+            {/* Setup Staging Watchlist — collapsed by default on mobile to keep scan results accessible */}
+            <div className="hidden md:block">
+              <WatchlistPanel />
+            </div>
+            <details className="md:hidden mb-2">
+              <summary className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer list-none flex items-center gap-1 py-1.5 px-1 rounded hover:bg-card/50">
+                <span className="text-[8px] transition-transform">▶</span> Staged Watchlist
+              </summary>
+              <div className="mt-1">
+                <WatchlistPanel />
+              </div>
+            </details>
 
             {/* Last Scan Results */}
             <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Latest Scan Results</h4>

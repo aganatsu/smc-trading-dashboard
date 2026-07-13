@@ -18,7 +18,7 @@ import {
 export default function ChartView() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('EUR/USD');
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('4h');
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 768);
   const [expandedPanels, setExpandedPanels] = useState<Set<string>>(new Set(['bias', 'structure', 'levels']));
 
   const instrument = useMemo(() =>
@@ -179,7 +179,7 @@ export default function ChartView() {
   return (
     <div className="flex flex-col md:flex-row w-full h-full overflow-hidden">
       {/* SMC Chart */}
-      <div className={`${panelOpen ? 'md:w-[65%] h-[50%] md:h-full' : 'w-full h-full'} relative transition-all duration-200 min-w-0`}>
+      <div className={`${panelOpen ? 'md:w-[65%] h-[45vh] md:h-full' : 'w-full h-full'} relative transition-all duration-200 min-w-0`}>
         {/* Timeframe bar */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-1 px-2 py-1 bg-card/80 backdrop-blur-sm border-b border-border">
           <span className="text-xs font-mono font-bold text-cyan mr-2">{selectedSymbol}</span>
@@ -215,7 +215,7 @@ export default function ChartView() {
 
       {/* Analysis Panels */}
       {panelOpen && (
-        <div className="w-full md:w-[35%] h-[50%] md:h-full border-t md:border-t-0 md:border-l border-border bg-card overflow-y-auto">
+        <div className="w-full md:w-[35%] h-[55vh] md:h-full border-t md:border-t-0 md:border-l border-border bg-card overflow-y-auto">
           {/* Market Bias */}
           <AccordionPanel
             id="bias"

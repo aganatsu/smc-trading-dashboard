@@ -1003,3 +1003,22 @@
 - [x] Wire verdict computation into scanInstrument() return path
 - [x] Extend scanResults router procedure to include directionVerdict in API response
 - [x] Add Direction Verdict display to scan result cards in BotView (verdict badge, confidence %, agreement count, block indicator)
+
+## Liquidity Sweep Gate — UI Toggle
+- [x] Add requireLiquiditySweep field to StrategySettings interface and DEFAULT_CONFIG
+- [x] Add sweptAbsorbedPenalty field to StrategySettings interface and DEFAULT_CONFIG
+- [x] Add "Require Entry-Trigger Sweep" toggle to BotConfigPanel Liquidity section
+- [x] Add "Absorbed Penalty" number input (0-5, step 0.5) to BotConfigPanel Liquidity section
+- [x] Verify TypeScript compiles with 0 errors
+- [x] Verify botConfig tests pass (16/16)
+- [x] Verify botConfigRoutes tests pass (9/9)
+
+## Mobile UX Fixes
+- [x] Mobile: Replace left icon rail with bottom tab bar on screens < 768px
+- [x] Mobile: Add safe-area insets for notched phones (viewport-fit=cover + env padding)
+- [x] Mobile: Fix bottom status bar overflow on mobile (trim to essentials)
+- [x] Mobile: Add card layout for DashboardView positions table on mobile
+- [x] Mobile: Fix ChartView 50/50 split — make analysis panel collapsible on mobile
+- [x] Mobile: Improve BotView scan results accessibility (less scrolling to reach)
+- [x] Mobile: Fix ICT correlation heatmap to scale within viewport (no horizontal scroll)
+- [x] Mobile: BotTradeChart collapsed by default on mobile

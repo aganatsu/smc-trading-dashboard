@@ -631,8 +631,8 @@ function CorrelationMatrixSVG({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ minHeight: 300 }}>
+      <div className="overflow-x-auto max-w-full">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ minHeight: 200, maxWidth: '100%' }}>
           {/* Column headers */}
           {data.pairs.map((p, i) => (
             <text

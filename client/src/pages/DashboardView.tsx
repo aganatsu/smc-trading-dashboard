@@ -421,64 +421,110 @@ export default function DashboardView() {
         <div className="lg:col-span-3 bg-card border border-border rounded-lg p-4">
           <h2 className="text-sm font-bold text-foreground mb-3">Active Positions</h2>
           {positions.length > 0 ? (
-            <div className="overflow-auto max-h-52 -mx-1">
-              <table className="w-full text-xs font-mono">
-                <thead>
-                  <tr className="text-muted-foreground border-b border-border/50">
-                    <th className="text-left py-1.5 px-1">Symbol</th>
-                    <th className="text-center py-1.5 px-1">Dir</th>
-                    <th className="text-right py-1.5 px-1">Entry</th>
-                    <th className="text-right py-1.5 px-1">Current</th>
-                    <th className="text-right py-1.5 px-1">P&L</th>
-                    <th className="text-right py-1.5 px-1">Size</th>
-                    <th className="text-right py-1.5 px-1">SL</th>
-                    <th className="text-right py-1.5 px-1">TP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((p) => {
-                    const decimals = p.symbol.includes("JPY") ? 3 : 4;
-                    return (
-                      <tr
-                        key={p.id}
-                        className="border-b border-border/30 hover:bg-card/80 transition-colors"
-                      >
-                        <td className="py-1.5 px-1 font-bold text-foreground">
-                          {p.symbol.replace("/", "")}
-                        </td>
-                        <td className="py-1.5 px-1 text-center">
-                          <span
-                            className={`inline-flex items-center gap-0.5 ${p.direction === "long" ? "text-emerald-400" : "text-red-400"}`}
-                          >
-                            {p.direction === "long" ? "▲" : "▼"}
+            <>
+              {/* Mobile: Card layout */}
+              <div className="md:hidden space-y-2 max-h-52 overflow-y-auto">
+                {positions.map((p) => {
+                  const decimals = p.symbol.includes("JPY") ? 3 : 4;
+                  return (
+                    <div key={p.id} className="bg-background/50 border border-border/50 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-foreground">{p.symbol.replace("/", "")}</span>
+                          <span className={`text-[10px] font-bold uppercase ${p.direction === "long" ? "text-emerald-400" : "text-red-400"}`}>
+                            {p.direction === "long" ? "▲ LONG" : "▼ SHORT"}
                           </span>
-                        </td>
-                        <td className="py-1.5 px-1 text-right text-muted-foreground">
-                          {p.entryPrice.toFixed(decimals)}
-                        </td>
-                        <td className="py-1.5 px-1 text-right text-foreground">
-                          {p.currentPrice?.toFixed(decimals) ?? "—"}
-                        </td>
-                        <td
-                          className={`py-1.5 px-1 text-right font-bold ${p.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                        >
+                        </div>
+                        <span className={`text-sm font-bold font-mono ${p.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                           {formatMoney(p.pnl, true)}
-                        </td>
-                        <td className="py-1.5 px-1 text-right text-foreground">
-                          {p.size.toFixed(2)}
-                        </td>
-                        <td className="py-1.5 px-1 text-right text-red-400/70">
-                          {p.stopLoss ? p.stopLoss.toFixed(decimals) : "—"}
-                        </td>
-                        <td className="py-1.5 px-1 text-right text-emerald-400/70">
-                          {p.takeProfit ? p.takeProfit.toFixed(decimals) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
+                        <div>
+                          <span className="text-muted-foreground">Entry</span>
+                          <div className="text-foreground">{p.entryPrice.toFixed(decimals)}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Current</span>
+                          <div className="text-foreground">{p.currentPrice?.toFixed(decimals) ?? "—"}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Size</span>
+                          <div className="text-foreground">{p.size.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">SL</span>
+                          <div className="text-red-400/70">{p.stopLoss ? p.stopLoss.toFixed(decimals) : "—"}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">TP</span>
+                          <div className="text-emerald-400/70">{p.takeProfit ? p.takeProfit.toFixed(decimals) : "—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Desktop: Table layout */}
+              <div className="hidden md:block overflow-auto max-h-52 -mx-1">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="text-muted-foreground border-b border-border/50">
+                      <th className="text-left py-1.5 px-1">Symbol</th>
+                      <th className="text-center py-1.5 px-1">Dir</th>
+                      <th className="text-right py-1.5 px-1">Entry</th>
+                      <th className="text-right py-1.5 px-1">Current</th>
+                      <th className="text-right py-1.5 px-1">P&L</th>
+                      <th className="text-right py-1.5 px-1">Size</th>
+                      <th className="text-right py-1.5 px-1">SL</th>
+                      <th className="text-right py-1.5 px-1">TP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positions.map((p) => {
+                      const decimals = p.symbol.includes("JPY") ? 3 : 4;
+                      return (
+                        <tr
+                          key={p.id}
+                          className="border-b border-border/30 hover:bg-card/80 transition-colors"
+                        >
+                          <td className="py-1.5 px-1 font-bold text-foreground">
+                            {p.symbol.replace("/", "")}
+                          </td>
+                          <td className="py-1.5 px-1 text-center">
+                            <span
+                              className={`inline-flex items-center gap-0.5 ${p.direction === "long" ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {p.direction === "long" ? "▲" : "▼"}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-1 text-right text-muted-foreground">
+                            {p.entryPrice.toFixed(decimals)}
+                          </td>
+                          <td className="py-1.5 px-1 text-right text-foreground">
+                            {p.currentPrice?.toFixed(decimals) ?? "—"}
+                          </td>
+                          <td
+                            className={`py-1.5 px-1 text-right font-bold ${p.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                          >
+                            {formatMoney(p.pnl, true)}
+                          </td>
+                          <td className="py-1.5 px-1 text-right text-foreground">
+                            {p.size.toFixed(2)}
+                          </td>
+                          <td className="py-1.5 px-1 text-right text-red-400/70">
+                            {p.stopLoss ? p.stopLoss.toFixed(decimals) : "—"}
+                          </td>
+                          <td className="py-1.5 px-1 text-right text-emerald-400/70">
+                            {p.takeProfit ? p.takeProfit.toFixed(decimals) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <div className="h-44 flex items-center justify-center text-muted-foreground text-xs font-mono">
               No active positions
