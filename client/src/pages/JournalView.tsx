@@ -373,10 +373,10 @@ export default function JournalView() {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`} />
                     <Tooltip
                       contentStyle={{ background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, fontSize: 11, fontFamily: 'monospace' }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cumulative P&L']}
+                      formatter={(value: number) => [`$${Math.round(value).toLocaleString()}`, 'Cumulative P&L']}
                     />
                     <Area type="monotone" dataKey="cumulative" stroke="oklch(0.85 0.18 192)" fill="url(#eqGrad)" strokeWidth={2} />
                   </AreaChart>
@@ -399,10 +399,10 @@ export default function JournalView() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyPnlData}>
                     <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`} />
                     <Tooltip
                       contentStyle={{ background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, fontSize: 11, fontFamily: 'monospace' }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'P&L']}
+                      formatter={(value: number) => [`$${Math.round(value).toLocaleString()}`, 'P&L']}
                     />
                     <Bar dataKey="pnl" radius={[2, 2, 0, 0]}>
                       {dailyPnlData.map((entry, index) => (

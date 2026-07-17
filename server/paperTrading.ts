@@ -115,6 +115,7 @@ export interface PaperAccountState {
   // Account
   balance: number;
   equity: number;
+  initialBalance: number;
   unrealizedPnl: number;
   marginUsed: number;
   freeMargin: number;
@@ -587,6 +588,7 @@ export function getStatus(): PaperAccountState {
   return {
     balance,
     equity,
+    initialBalance: INITIAL_BALANCE,
     unrealizedPnl,
     marginUsed,
     freeMargin,

@@ -29,9 +29,10 @@ import {
 
 function formatMoney(val: number, showSign = false): string {
   const abs = Math.abs(val);
+  const decimals = abs >= 1000 ? 0 : 2;
   const str =
     abs >= 1000
-      ? `$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ? `$${abs.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
       : `$${abs.toFixed(2)}`;
   if (showSign) return val >= 0 ? `+${str}` : `-${str}`;
   return str;
@@ -76,7 +77,7 @@ export default function DashboardView() {
   const rejectedCount = d?.rejectedCount ?? 0;
 
   // Profit from initial balance
-  const startingBalance = 10000;
+  const startingBalance = d?.initialBalance ?? 10000;
   const profit = balance - startingBalance;
   const profitPct = ((profit / startingBalance) * 100).toFixed(1);
 
@@ -126,7 +127,7 @@ export default function DashboardView() {
         benchmark: startingBalance,
       };
     });
-  }, [equityCurve.data, timeRange]);
+  }, [equityCurve.data, timeRange, startingBalance]);
 
   // Max drawdown from chart data
   const maxDrawdown = useMemo(() => {
@@ -349,8 +350,8 @@ export default function DashboardView() {
                   tick={{ fontSize: 10, fill: "#6B7280" }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
-                  domain={["dataMin - 200", "dataMax + 200"]}
+                  tickFormatter={(v: number) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`}
+                  domain={[(dataMin: number) => Math.floor(dataMin - (dataMin * 0.002)), (dataMax: number) => Math.ceil(dataMax + (dataMax * 0.002))]}
                 />
                 <YAxis
                   yAxisId="dd"
@@ -370,9 +371,9 @@ export default function DashboardView() {
                     fontFamily: "monospace",
                   }}
                   formatter={(value: number, name: string) => {
-                    if (name === "equity") return [`$${value.toFixed(2)}`, "Equity"];
-                    if (name === "drawdown") return [`${value.toFixed(2)}%`, "Drawdown"];
-                    if (name === "benchmark") return [`$${value.toFixed(2)}`, "Benchmark"];
+                    if (name === "equity") return [`$${Math.round(value).toLocaleString()}`, "Equity"];
+                    if (name === "drawdown") return [`${value.toFixed(1)}%`, "Drawdown"];
+                    if (name === "benchmark") return [`$${Math.round(value).toLocaleString()}`, "Benchmark"];
                     return [value, name];
                   }}
                 />

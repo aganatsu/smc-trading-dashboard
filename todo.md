@@ -1022,3 +1022,13 @@
 - [x] Mobile: Improve BotView scan results accessibility (less scrolling to reach)
 - [x] Mobile: Fix ICT correlation heatmap to scale within viewport (no horizontal scroll)
 - [x] Mobile: BotTradeChart collapsed by default on mobile
+
+## Equity Curve Chart Fixes
+- [x] Fix Y-axis scaling: use dynamic domain based on data range (not starting from $0)
+- [x] Fix starting balance: use actual account startingBalance from bot config instead of hardcoded $10,000
+- [x] Fix decimal places: reduce to 0 decimals for Y-axis labels and tooltips use toLocaleString()
+- [x] Fix time range filter: ensure switching between 1W/1M/3M/6M/ALL actually updates the chart
+- [x] Add initialBalance to paper.status response so frontend can use the real value
+- [x] Fix useMemo dependency array to include startingBalance for proper re-render
+- [x] Fix JournalView equity chart formatting for consistency (Y-axis + tooltip)
+- [x] Write Vitest tests for equity curve data transformation (25 tests)
