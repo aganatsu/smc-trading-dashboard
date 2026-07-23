@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import {
   Settings2, Shield, ArrowRightLeft, LogOut, Filter, Clock, Bell, Wallet,
   ChevronDown, ChevronRight, RotateCcw, Save, Zap, Target, TrendingUp,
-  AlertTriangle, ToggleLeft, ToggleRight,
+  AlertTriangle, ToggleLeft, ToggleRight, Download, Upload,
 } from 'lucide-react';
 
 // ─── Types (mirror server/botConfig.ts) ─────────────────────────────
@@ -543,6 +543,65 @@ export default function BotConfigPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // ─── Export / Import ─────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const importMutation = trpc.botConfig.import.useMutation({
+    onSuccess: () => {
+      refetch();
+      setHasChanges(false);
+      setImporting(false);
+    },
+    onError: () => setImporting(false),
+  });
+
+  const handleExport = () => {
+    if (!localConfig) return;
+    const bundle = {
+      _meta: { version: 1, exportedAt: new Date().toISOString(), source: 'smc-trading-bot' },
+      config: localConfig,
+    };
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `smc-bot-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        // Support both wrapped format { _meta, config } and raw config
+        const configPayload = parsed.config || parsed;
+        const meta = parsed._meta || { version: 1 };
+        if (!configPayload || typeof configPayload !== 'object') {
+          alert('Invalid config file: no valid configuration found.');
+          return;
+        }
+        if (confirm(`Import config${meta.exportedAt ? ` (exported ${meta.exportedAt.slice(0, 10)})` : ''}? This will overwrite your current settings.`)) {
+          setImporting(true);
+          importMutation.mutate({ _meta: meta, config: configPayload });
+        }
+      } catch {
+        alert('Invalid file: could not parse JSON.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be re-imported
+    e.target.value = '';
+  };
+
   if (!localConfig) {
     return (
       <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
@@ -564,6 +623,14 @@ export default function BotConfigPanel({ onClose }: { onClose: () => void }) {
             {hasChanges && <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">Unsaved changes</span>}
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={handleExport} title="Export config" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-muted-foreground rounded transition-colors">
+              <Download size={12} /> Export
+            </button>
+            <button onClick={handleImportClick} disabled={importing} title="Import config" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-muted-foreground rounded transition-colors">
+              <Upload size={12} /> {importing ? 'Importing...' : 'Import'}
+            </button>
+            <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
+            <div className="w-px h-5 bg-zinc-700" />
             <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-muted-foreground rounded transition-colors">
               <RotateCcw size={12} /> Reset Defaults
             </button>

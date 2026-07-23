@@ -965,9 +965,9 @@
 - [x] Read and debug the game plan dedup logic in bot-scanner — found 3 bugs
 - [x] Fix: added error handling, JS fallback query, debug logging (commit 2624daf)
 - [x] Push fix to GitHub (commit 2624daf)
-- [ ] Add clickable row expansion to Closed Today tab showing trade reasoning breakdown (factors, score, session)
-- [ ] Add post-mortem data (outcome, what worked/failed, lesson) to expanded row
-- [ ] Add same expandable detail to History tab for consistency
+- [x] Add clickable row expansion to Closed Today tab showing trade reasoning breakdown (factors, score, session)
+- [x] Add post-mortem data (outcome, what worked/failed, lesson) to expanded row
+- [x] Add same expandable detail to History tab for consistency
 
 ## Mobile Horizontal Overflow Fixes
 - [x] BotView: Convert position/order/history tables to mobile card layout (stack vertically, hide low-priority columns)
@@ -1032,3 +1032,11 @@
 - [x] Fix useMemo dependency array to include startingBalance for proper re-render
 - [x] Fix JournalView equity chart formatting for consistency (Y-axis + tooltip)
 - [x] Write Vitest tests for equity curve data transformation (25 tests)
+
+## Bot Config Export/Import
+- [x] Add exportConfig tRPC procedure that returns full config JSON with metadata (version, timestamp, name)
+- [x] Add importConfig tRPC procedure that validates and applies uploaded config JSON
+- [x] Add Export (Download) button to BotConfigPanel header toolbar
+- [x] Add Import (Upload) button to BotConfigPanel header toolbar with file picker
+- [x] Add validation on import (schema check, version compatibility)
+- [x] Write vitest tests for export/import procedures

@@ -116,6 +116,50 @@ export const appRouter = router({
     reset: protectedProcedure.mutation(async ({ ctx }) => {
       return resetConfig(ctx.user.id);
     }),
+    /** Export full config as a portable JSON bundle with metadata */
+    export: protectedProcedure.query(async ({ ctx }) => {
+      if (!isConfigLoaded()) {
+        await loadConfigFromDb(ctx.user.id);
+      }
+      const config = getConfig();
+      return {
+        _meta: {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          source: 'smc-trading-bot',
+        },
+        config,
+      };
+    }),
+    /** Import a previously exported config bundle — validates and applies */
+    import: protectedProcedure
+      .input(z.object({
+        _meta: z.object({
+          version: z.number(),
+          exportedAt: z.string().optional(),
+          source: z.string().optional(),
+        }).optional(),
+        config: z.object({
+          strategy: z.any().optional(),
+          risk: z.any().optional(),
+          entry: z.any().optional(),
+          exit: z.any().optional(),
+          instruments: z.any().optional(),
+          sessions: z.any().optional(),
+          notifications: z.any().optional(),
+          protection: z.any().optional(),
+          account: z.any().optional(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Validate at least one section is present
+        const sections = Object.keys(input.config).filter(k => input.config[k as keyof typeof input.config] !== undefined);
+        if (sections.length === 0) {
+          throw new Error('Imported config has no valid sections');
+        }
+        const updated = await updateConfig(input.config as Partial<BotConfig>, ctx.user.id);
+        return { success: true, sectionsApplied: sections, config: updated };
+      }),
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
